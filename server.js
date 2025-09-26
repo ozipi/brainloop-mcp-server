@@ -342,7 +342,7 @@ app.get('/api/auth/authorize', (req, res) => {
 
   console.log('🔄 Redirecting to main app OAuth:', mainAppOAuthUrl.toString());
 
-  res.redirect(mainAppOAuthUrl.toString());
+  res.redirect(302, mainAppOAuthUrl.toString());
 });
 
 // OAuth callback endpoint (handles redirect from main app)
