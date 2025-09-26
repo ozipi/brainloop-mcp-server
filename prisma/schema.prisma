@@ -1,0 +1,455 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String             @id @default(cuid())
+  name              String?
+  email             String             @unique
+  emailVerified     DateTime?
+  image             String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  lastLoginAt       DateTime?
+  apiToken          String?            @unique
+  apiTokenCreatedAt DateTime?
+  apiCallsCount     Int                @default(0)
+  apiCallsLimit     Int                @default(500)
+  apiCallsReset     DateTime?
+  isAdmin           Boolean            @default(false)
+  accounts          Account[]
+  codeSubmissions   CodeSubmission[]
+  courses           Course[]
+  enrollments       Enrollment[]
+  progress          Progress[]
+  reviewHistory     ReviewHistory[]
+  sessions          Session[]
+  moodBoards        MoodBoard[]
+  moodReferences    MoodReference[]
+  unitProgress      UserUnitProgress[]
+  feedback          Feedback[]
+}
+
+model WaitlistUser {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  name        String?
+  createdAt   DateTime @default(now())
+  notified    Boolean  @default(false)
+  priority    Int      @default(0)
+  referralCode String?
+  source      String?  @default("organic")
+
+  @@index([createdAt])
+  @@index([notified])
+}
+
+model AllowedUser {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  isActive  Boolean  @default(true)
+  addedBy   String?
+  reason    String?
+
+  @@index([email])
+  @@index([isActive])
+}
+
+model InviteKey {
+  id          String    @id @default(cuid())
+  key         String    @unique @db.VarChar(64) // 64 hex characters
+  email       String?   // Optional: restrict to specific email
+  createdBy   String    // User ID who created the invite
+  createdAt   DateTime  @default(now())
+  expiresAt   DateTime?
+  usedAt      DateTime?
+  usedBy      String?   // User ID who used the invite
+  isActive    Boolean   @default(true)
+  isUsed      Boolean   @default(false)
+  reason      String?
+
+  @@index([key])
+  @@index([isActive])
+  @@index([createdBy])
+  @@index([email])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Course {
+  id           String       @id @default(cuid())
+  title        String
+  description  String
+  hero         String?
+  icon         String?
+  isPrivate    Boolean      @default(true)
+  userId       String
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  tags         String[]     @default([])
+  author       String       @default("Unknown")
+  customDomain String?      @unique
+  domainStatus String?      @default("pending")
+  subdomain    String?      @unique
+  order        Int          @default(0)
+  googleClientId     String?  // OAuth Client ID for custom domain
+  googleClientSecret String?  // OAuth Client Secret for custom domain
+  oauthConfigured    Boolean  @default(false) // Track OAuth setup status
+
+  // Course branding for custom domains
+  brandingLogo       String?  // Course logo URL
+  brandingTitle      String?  // Custom course title for branding
+  brandingColor      String?  // Primary brand color (hex)
+  user         User           @relation(fields: [userId], references: [id])
+  enrollments  Enrollment[]
+  progress     Progress[]
+  reviewHistory ReviewHistory[]
+  units        Unit[]
+  Course_A     Course[]       @relation("RelatedCourses")
+  Course_B     Course[]       @relation("RelatedCourses")
+  oauthClientPool OAuthClientPool[] // OAuth clients assigned to this course
+  shortLinks   CourseShortLink[] // Short links for sharing this course
+
+  @@index([userId])
+  @@index([subdomain])
+  @@index([customDomain])
+}
+
+model Unit {
+  id            String             @id @default(cuid())
+  title         String
+  description   String
+  order         Int                @default(0)
+  courseId      String
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  isLocked      Boolean            @default(false)
+  position      Json?
+  lessons       Lesson[]
+  course        Course             @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  prerequisites UnitDependency[]   @relation("UnitPrerequisites")
+  dependencies  UnitDependency[]   @relation("UnitDependencies")
+  userProgress  UserUnitProgress[]
+
+  @@index([courseId])
+}
+
+model UnitDependency {
+  id          String   @id @default(cuid())
+  unitId      String
+  dependsOnId String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  dependsOn   Unit     @relation("UnitPrerequisites", fields: [dependsOnId], references: [id], onDelete: Cascade)
+  unit        Unit     @relation("UnitDependencies", fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@unique([unitId, dependsOnId])
+  @@map("unit_dependencies")
+}
+
+model UserUnitProgress {
+  id          String    @id @default(cuid())
+  userId      String
+  unitId      String
+  isUnlocked  Boolean   @default(false)
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  unit        Unit      @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, unitId])
+  @@map("user_unit_progress")
+}
+
+model Lesson {
+  id           String        @id @default(cuid())
+  title        String
+  content      String
+  videoUrl     String?       // Optional video URL (YouTube, Vimeo, direct links)
+  videoDuration Int?         // Video duration in seconds
+  videoThumbnail String?     // Video thumbnail URL
+  order        Int           @default(0)
+  unitId       String
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  interactions Interaction[]
+  unit         Unit          @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  progress     Progress[]
+  reviewHistory ReviewHistory[]
+
+  @@index([unitId])
+}
+
+model Interaction {
+  id        String   @id @default(cuid())
+  type      String
+  lessonId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  lesson    Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  prompts   Prompt[]
+
+  @@index([lessonId])
+}
+
+model Prompt {
+  id                 String      @id @default(cuid())
+  question           String
+  type               String
+  options            String[]
+  answer             Json
+  explanation        String?
+  interactionId      String
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+  codeExpectedOutput String?
+  codeLanguage       String?
+  codeMemoryLimit    Int?
+  codeStarterCode    String?
+  codeTestCases      Json?
+  codeTimeLimit      Int?
+  codeSolution       String?     // Complete solution code for "Show Solution" feature
+
+  // Interactive component fields
+  componentType      String?     // "alphabet", "map", "diagram", etc.
+  componentConfig    Json?       // Component configuration
+  componentAnswer    Json?       // Expected component interaction result
+
+  interaction        Interaction @relation(fields: [interactionId], references: [id], onDelete: Cascade)
+  codeSubmissions    CodeSubmission[]
+
+  @@index([interactionId])
+  @@index([type])
+  @@index([componentType])
+}
+
+model Progress {
+  id              String    @id @default(cuid())
+  userId          String
+  status          String    @default("not_started")
+  nextReview      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  lessonId        String
+  courseId        String
+  lastReview      DateTime?
+  completedAt     DateTime? // When the lesson was first completed (not when progress record was created)
+  completionCount Int       @default(0)  // Track how many times this lesson has been completed/reviewed
+  course          Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lesson          Lesson    @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, lessonId])
+  @@index([userId])
+  @@index([lessonId])
+  @@index([courseId])
+}
+
+model ReviewHistory {
+  id         String   @id @default(cuid())
+  userId     String
+  lessonId   String
+  courseId   String
+  reviewedAt DateTime @default(now())
+  quality    Int      // Review quality score (0-5)
+  isInitial  Boolean  @default(false) // True for initial lesson completion, false for reviews
+  createdAt  DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lesson     Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  course     Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([lessonId])
+  @@index([courseId])
+  @@index([reviewedAt])
+}
+
+model Enrollment {
+  id       String @id @default(cuid())
+  userId   String
+  courseId String
+  order    Int    @default(0)
+  course   Course @relation(fields: [courseId], references: [id])
+  user     User   @relation(fields: [userId], references: [id])
+
+  @@unique([userId, courseId])
+}
+
+model FeatureFlag {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  enabled     Boolean  @default(false)
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model CodeSubmission {
+  id            String   @id @default(cuid())
+  userId        String
+  promptId      String
+  code          String
+  language      String
+  passed        Boolean  @default(false)
+  executionTime Int?
+  memoryUsage   Int?
+  output        String?
+  error         String?
+  testResults   Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  prompt        Prompt   @relation(fields: [promptId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([promptId])
+  @@index([passed])
+}
+
+model MoodBoard {
+  id              String          @id @default(cuid())
+  name            String
+  description     String?
+  canvasWidth     Int             @default(5000)
+  canvasHeight    Int             @default(3000)
+  backgroundColor String          @default("#ffffff")
+  isPublic        Boolean         @default(false)
+  slug            String?         @unique
+  userId          String
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  references      MoodReference[]
+
+  @@index([userId])
+  @@index([slug])
+  @@index([isPublic])
+  @@map("mood_boards")
+}
+
+model MoodReference {
+  id          String    @id @default(cuid())
+  imageUrl    String
+  imageName   String
+  imageSize   Int
+  mimeType    String
+  x           Float
+  y           Float
+  width       Float
+  height      Float
+  rotation    Float     @default(0)
+  zIndex      Int       @default(0)
+  opacity     Float     @default(1.0)
+  locked      Boolean   @default(false)
+  title       String?
+  description String?
+  tags        Json?
+  moodBoardId String
+  userId      String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  moodBoard   MoodBoard @relation(fields: [moodBoardId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([moodBoardId, zIndex])
+  @@index([userId])
+  @@map("mood_references")
+}
+
+model OAuthClientPool {
+  id                String   @id @default(cuid())
+  clientId          String   @unique // Google OAuth Client ID
+  clientSecret      String   // Google OAuth Client Secret (encrypted)
+  redirectUris      Json     // Array of configured redirect URIs
+  assignedToDomain  String?  @unique // Which custom domain this client is assigned to
+  assignedToCourse  String?  // Which course this client is assigned to
+  assignedAt        DateTime? // When this client was assigned
+  isAvailable       Boolean  @default(true) // Whether this client is available for assignment
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Optional: Link to course if assigned
+  course            Course?  @relation(fields: [assignedToCourse], references: [id], onDelete: SetNull)
+
+  @@index([isAvailable])
+  @@index([assignedToDomain])
+  @@index([assignedToCourse])
+  @@map("oauth_client_pool")
+}
+
+model CourseShortLink {
+  id           String   @id @default(cuid())
+  courseId     String
+  shortCode    String   @unique
+  shortUrl     String
+  originalUrl  String
+  customDomain String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  course       Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@index([courseId])
+  @@index([shortCode])
+  @@map("course_short_links")
+}
+
+model Feedback {
+  id          String   @id @default(cuid())
+  userId      String
+  message     String
+  type        String   @default("general") // "bug", "feature", "general", "improvement"
+  priority    String   @default("medium") // "low", "medium", "high", "critical"
+  status      String   @default("open") // "open", "in_progress", "resolved", "closed"
+  url         String?  // Page URL where feedback was submitted
+  userAgent   String?  // Browser/device info
+  screenshot  String?  // Optional screenshot URL
+  metadata    Json?    // Additional context (screen size, course, lesson, etc.)
+  adminNotes  String?  // Internal admin notes
+  resolvedAt  DateTime?
+  resolvedBy  String?  // Admin user ID who resolved
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@index([type])
+  @@index([priority])
+  @@index([createdAt])
+  @@map("feedback")
+}
