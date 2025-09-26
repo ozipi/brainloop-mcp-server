@@ -454,8 +454,11 @@ app.get('/api/auth/authorize', (req, res) => {
   `;
 
   // Set headers to allow this page to be displayed in iframes/popups
-  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
-  res.setHeader('Content-Security-Policy', "frame-ancestors 'self' https://claude.ai https://*.claude.ai;");
+  res.setHeader('X-Frame-Options', 'ALLOWALL');
+  res.setHeader('Content-Security-Policy', "frame-ancestors *;");
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.setHeader('Content-Type', 'text/html');
 
   res.send(authPageHTML);
