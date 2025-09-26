@@ -85,7 +85,11 @@ app.get('/.well-known/oauth-authorization-server', (req, res) => {
     subject_types_supported: ['public'],
     id_token_signing_alg_values_supported: ['HS256'],
     scopes_supported: ['openid', 'email', 'profile', 'mcp:read', 'mcp:write'],
-    claims_supported: ['iss', 'sub', 'aud', 'exp', 'iat', 'email', 'name']
+    claims_supported: ['iss', 'sub', 'aud', 'exp', 'iat', 'email', 'name'],
+    // Indicate this server doesn't support popup flows due to X-Frame-Options
+    'ui_locales_supported': ['en'],
+    'display_values_supported': ['page'], // Only supports full page redirects, not popups
+    'claim_types_supported': ['normal']
   });
 });
 
@@ -309,23 +313,152 @@ app.get('/api/auth/signin', (req, res) => {
   res.redirect(mainAppUrl.toString());
 });
 
-// OAuth authorize endpoint
+// OAuth authorize endpoint - create a popup-friendly authorization page
 app.get('/api/auth/authorize', (req, res) => {
-  const { client_id, response_type, scope, redirect_uri, state } = req.query;
+  const { client_id, response_type, scope, redirect_uri, state, code_challenge, code_challenge_method } = req.query;
 
   console.log('🔑 OAuth authorize request:', {
     client_id,
     response_type,
     scope,
     redirect_uri,
-    state
+    state,
+    code_challenge,
+    code_challenge_method
   });
 
-  // Redirect to main app signin with preserved parameters
-  const signinUrl = new URL('/api/auth/signin', 'https://brainloop.cc');
-  signinUrl.searchParams.set('callbackUrl', req.originalUrl);
+  // Create a popup-friendly authorization page
+  const authPageHTML = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BRAINLOOP Authorization</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 400px;
+            margin: 50px auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .auth-container {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            text-align: center;
+        }
+        .logo {
+            color: #c43300;
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+        .description {
+            color: #666;
+            margin-bottom: 25px;
+            line-height: 1.5;
+        }
+        .auth-button {
+            background: #c43300;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            width: 100%;
+            margin-bottom: 15px;
+            text-decoration: none;
+            display: inline-block;
+            box-sizing: border-box;
+        }
+        .auth-button:hover {
+            background: #a52c00;
+        }
+        .cancel-button {
+            background: #f5f5f5;
+            color: #666;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            width: 100%;
+        }
+        .cancel-button:hover {
+            background: #e0e0e0;
+        }
+        .scopes {
+            background: #f8f9fa;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 20px 0;
+            text-align: left;
+        }
+        .scopes h4 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+        .scope-item {
+            color: #666;
+            font-size: 14px;
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="auth-container">
+        <div class="logo">BRAINLOOP</div>
+        <div class="description">
+            Claude wants to connect to your BRAINLOOP account to access your learning data and courses.
+        </div>
 
-  res.redirect(signinUrl.toString());
+        <div class="scopes">
+            <h4>Requested permissions:</h4>
+            <div class="scope-item">• Read your profile information</div>
+            <div class="scope-item">• Access your courses and progress</div>
+            <div class="scope-item">• View your learning statistics</div>
+        </div>
+
+        <a href="https://brainloop.cc/api/auth/signin?callbackUrl=${encodeURIComponent(req.originalUrl)}"
+           class="auth-button">
+            Continue with BRAINLOOP
+        </a>
+
+        <button onclick="window.close()" class="cancel-button">
+            Cancel
+        </button>
+    </div>
+
+    <script>
+        // If this is opened in a popup and the user is already authenticated,
+        // we can try to handle the OAuth flow automatically
+        console.log('OAuth authorization page loaded');
+
+        // Listen for messages from the parent window
+        window.addEventListener('message', function(event) {
+            if (event.data.type === 'oauth_complete') {
+                window.close();
+            }
+        });
+    </script>
+</body>
+</html>
+  `;
+
+  // Set headers to allow this page to be displayed in iframes/popups
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Content-Security-Policy', "frame-ancestors 'self' https://claude.ai https://*.claude.ai;");
+  res.setHeader('Content-Type', 'text/html');
+
+  res.send(authPageHTML);
 });
 
 // OAuth callback endpoint (handles redirect from main app)
