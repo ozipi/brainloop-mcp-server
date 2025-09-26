@@ -99,8 +99,8 @@ app.get('/.well-known/mcp-client-config', (req, res) => {
     redirect_uris: [`${baseUrl}/api/auth/callback`],
     scopes: ["mcp:read", "mcp:write"],
     mcp_transport: {
-      type: "sse",
-      endpoint: `${baseUrl}/api/mcp/sse`
+      type: "http",
+      endpoint: `${baseUrl}/api/mcp/server`
     },
     auth: {
       type: "oauth2",
@@ -400,6 +400,148 @@ app.post('/api/auth/token', async (req, res) => {
     console.error('🎫 Token generation error:', error);
     res.status(500).json({ error: 'Token generation failed' });
   }
+});
+
+// Root path handler - handle MCP requests directly
+app.all('/', async (req, res) => {
+  console.log('🏠 Root path request - handling as MCP server request');
+  
+  // If it's a POST request with JSON body, handle as MCP request
+  if (req.method === 'POST' && req.headers['content-type']?.includes('application/json')) {
+    console.log('📨 Handling POST request as MCP server request');
+    
+    // Use the same logic as the MCP server endpoint
+    const userAgent = req.headers['user-agent'] || 'unknown';
+    const origin = req.headers.origin || '';
+    const referer = req.headers.referer || '';
+
+    const isClaudeWebByUA = userAgent.includes('claude') || userAgent.includes('anthropic') || userAgent.includes('Claude-User');
+    const isClaudeWebByOrigin = origin.includes('claude.ai') || referer.includes('claude.ai');
+    const isClaudeWeb = isClaudeWebByUA || isClaudeWebByOrigin;
+
+    console.log('🤖 MCP Server request (via root):', {
+      method: req.method,
+      isClaudeWeb,
+      userAgent: userAgent.substring(0, 50),
+      hasBody: !!req.body
+    });
+
+    if (req.method === 'OPTIONS') {
+      return res.status(200).json({});
+    }
+
+    try {
+      const body = req.body || {};
+      const method = body.method || 'unknown';
+
+      // Allow Claude web to perform initialize and discovery calls without authentication
+      if (isClaudeWeb && (method === 'initialize' || method === 'tools/list' || method === 'resources/list')) {
+        console.log('🔓 Allowing Claude web discovery call without auth:', method);
+
+        if (method === 'initialize') {
+          return res.json({
+            jsonrpc: '2.0',
+            id: body.id,
+            result: {
+              protocolVersion: '2024-11-05',
+              capabilities: {
+                tools: { listChanged: true },
+                resources: { listChanged: true, subscribe: false },
+                logging: { level: 'info' }
+              },
+              serverInfo: {
+                name: 'BRAINLOOP MCP Server',
+                version: '1.0.0',
+                description: 'MCP server for BRAINLOOP spaced repetition learning platform'
+              }
+            }
+          });
+        }
+
+        if (method === 'tools/list') {
+          return res.json({
+            jsonrpc: '2.0',
+            id: body.id,
+            result: {
+              tools: [
+                {
+                  name: 'get_courses',
+                  description: 'Get list of available courses',
+                  inputSchema: {
+                    type: 'object',
+                    properties: {}
+                  }
+                }
+              ]
+            }
+          });
+        }
+
+        if (method === 'resources/list') {
+          return res.json({
+            jsonrpc: '2.0',
+            id: body.id,
+            result: {
+              resources: [
+                {
+                  uri: 'brainloop://courses',
+                  name: 'Courses',
+                  description: 'List of all courses',
+                  mimeType: 'application/json'
+                }
+              ]
+            }
+          });
+        }
+      }
+
+      // For other requests, require authentication
+      const authContext = await authenticateRequest(req);
+
+      if (!authContext) {
+        console.log('❌ MCP Server: Authentication required');
+        return res.status(401).json({
+          jsonrpc: '2.0',
+          id: body.id,
+          error: { code: -32001, message: 'Authentication required' }
+        });
+      }
+
+      console.log('✅ Authenticated MCP request for user:', authContext.userId);
+
+      // Handle authenticated MCP methods here
+      return res.json({
+        jsonrpc: '2.0',
+        id: body.id,
+        result: { status: 'authenticated', method }
+      });
+
+    } catch (error) {
+      console.error('MCP Server error:', error);
+      return res.status(500).json({
+        jsonrpc: '2.0',
+        id: req.body?.id,
+        error: { code: -32603, message: 'Internal error' }
+      });
+    }
+  }
+  
+  // For other requests, return MCP server info
+  res.json({
+    name: 'BRAINLOOP MCP Server',
+    version: '1.0.0',
+    description: 'MCP server for BRAINLOOP spaced repetition learning platform',
+    endpoints: {
+      mcp: '/api/mcp/server',
+      sse: '/api/mcp/sse',
+      auth: '/api/auth/authorize',
+      health: '/health'
+    },
+    discovery: {
+      oauth: '/.well-known/oauth-authorization-server',
+      mcp_config: '/.well-known/mcp-client-config'
+    }
+  });
 });
 
 // Health check
