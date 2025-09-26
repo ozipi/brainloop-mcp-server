@@ -522,69 +522,110 @@ app.all('/', async (req, res) => {
             result: {
               tools: [
                 {
-                  name: 'get_courses',
-                  description: 'Get list of all available courses in BRAINLOOP',
+                  name: 'create_course',
+                  description: 'Create a new course in the BRAINLOOP system',
                   inputSchema: {
                     type: 'object',
                     properties: {
-                      limit: {
-                        type: 'number',
-                        description: 'Maximum number of courses to return',
-                        default: 10
-                      },
-                      category: {
-                        type: 'string',
-                        description: 'Filter courses by category',
-                        enum: ['programming', 'design', 'business', 'all']
-                      }
-                    }
-                  }
-                },
-                {
-                  name: 'get_course_details',
-                  description: 'Get detailed information about a specific course',
-                  inputSchema: {
-                    type: 'object',
-                    properties: {
-                      course_id: {
-                        type: 'string',
-                        description: 'The ID of the course to get details for'
-                      }
+                      title: { type: 'string', description: 'Course title' },
+                      description: { type: 'string', description: 'Course description' },
+                      author: { type: 'string', description: 'Course author' },
+                      tags: { type: 'array', items: { type: 'string' }, description: 'Course tags' },
+                      hero: { type: 'string', description: 'Hero image URL' },
+                      icon: { type: 'string', description: 'Course icon URL' },
+                      isPrivate: { type: 'boolean', description: 'Whether the course is private' },
+                      userId: { type: 'string', description: 'User ID of the course creator' },
                     },
-                    required: ['course_id']
-                  }
-                },
-                {
-                  name: 'search_courses',
-                  description: 'Search for courses by title, description, or tags',
-                  inputSchema: {
-                    type: 'object',
-                    properties: {
-                      query: {
-                        type: 'string',
-                        description: 'Search query to find courses'
-                      },
-                      tags: {
-                        type: 'array',
-                        items: { type: 'string' },
-                        description: 'Filter by specific tags'
-                      }
-                    },
-                    required: ['query']
-                  }
+                    required: ['title', 'description', 'userId'],
+                  },
                 },
                 {
                   name: 'get_user_progress',
-                  description: 'Get the current user\'s learning progress',
+                  description: 'Get learning progress for a specific user',
                   inputSchema: {
                     type: 'object',
                     properties: {
-                      course_id: {
-                        type: 'string',
-                        description: 'Optional course ID to get progress for specific course'
-                      }
-                    }
-                  }
+                      userId: { type: 'string', description: 'User ID' },
+                      courseId: { type: 'string', description: 'Optional course ID to filter by' },
+                    },
+                    required: ['userId'],
+                  },
+                },
+                {
+                  name: 'update_progress',
+                  description: 'Update learning progress for a lesson',
+                  inputSchema: {
+                    type: 'object',
+                    properties: {
+                      userId: { type: 'string', description: 'User ID' },
+                      lessonId: { type: 'string', description: 'Lesson ID' },
+                      status: { type: 'string', description: 'Progress status (not_started, in_progress, completed)' },
+                    },
+                    required: ['userId', 'lessonId', 'status'],
+                  },
+                },
+                {
+                  name: 'get_review_schedule',
+                  description: 'Get the review schedule for a user based on nextReview dates',
+                  inputSchema: {
+                    type: 'object',
+                    properties: {
+                      userId: { type: 'string', description: 'User ID' },
+                      courseId: { type: 'string', description: 'Optional course ID to filter by' },
+                    },
+                    required: ['userId'],
+                  },
+                },
+                {
+                  name: 'enroll_user',
+                  description: 'Enroll a user in a course',
+                  inputSchema: {
+                    type: 'object',
+                    properties: {
+                      userId: { type: 'string', description: 'User ID' },
+                      courseId: { type: 'string', description: 'Course ID' },
+                    },
+                    required: ['userId', 'courseId'],
+                  },
+                },
+                {
+                  name: 'get_user_enrollments',
+                  description: 'Get all courses a user is enrolled in',
+                  inputSchema: {
+                    type: 'object',
+                    properties: {
+                      userId: { type: 'string', description: 'User ID' },
+                    },
+                    required: ['userId'],
+                  },
+                },
+                {
+                  name: 'create_course_from_json',
+                  description: 'Create a new course and all its units/lessons from a single JSON object',
+                  inputSchema: {
+                    type: 'object',
+                    properties: {
+                      courseData: { 
+                        type: 'object', 
+                        description: 'Complete course JSON structure with title, description, units, lessons, etc.' 
+                      },
+                    },
+                    required: ['courseData'],
+                  },
+                },
+                {
+                  name: 'get_course_structure',
+                  description: 'Get the current structure of a course (units and lesson counts)',
+                  inputSchema: {
+                    type: 'object',
+                    properties: {
+                      courseId: { 
+                        type: 'string', 
+                        description: 'ID of the course to get structure for' 
+                      },
+                    },
+                    required: ['courseId'],
+                  },
                 }
               ]
             }
@@ -600,10 +641,22 @@ app.all('/', async (req, res) => {
                 {
                   uri: 'brainloop://courses',
                   name: 'Courses',
-                  description: 'List of all courses',
-                  mimeType: 'application/json'
-                }
-              ]
+                  description: 'All available courses in the BRAINLOOP system',
+                  mimeType: 'application/json',
+                },
+                {
+                  uri: 'brainloop://users',
+                  name: 'Users',
+                  description: 'All users in the BRAINLOOP system',
+                  mimeType: 'application/json',
+                },
+                {
+                  uri: 'brainloop://progress',
+                  name: 'Progress',
+                  description: 'All learning progress records',
+                  mimeType: 'application/json',
+                },
+              ],
             }
           });
         }
@@ -612,213 +665,387 @@ app.all('/', async (req, res) => {
           const { name, arguments: args } = body.params || {};
           console.log('🔧 Tool call:', { name, args });
 
-          if (name === 'get_courses') {
-            const limit = args?.limit || 10;
-            const category = args?.category || 'all';
-            
-            const courses = [
-              { id: 'js-fundamentals', title: 'JavaScript Fundamentals', description: 'Learn the basics of JavaScript programming', category: 'programming', tags: ['javascript', 'programming', 'beginner'] },
-              { id: 'react-dev', title: 'React Development', description: 'Build modern web apps with React', category: 'programming', tags: ['react', 'javascript', 'frontend'] },
-              { id: 'node-backend', title: 'Node.js Backend', description: 'Server-side JavaScript development', category: 'programming', tags: ['nodejs', 'javascript', 'backend'] },
-              { id: 'db-design', title: 'Database Design', description: 'Design and optimize databases', category: 'programming', tags: ['database', 'sql', 'design'] },
-              { id: 'ui-design', title: 'UI/UX Design', description: 'Create beautiful and functional user interfaces', category: 'design', tags: ['design', 'ui', 'ux'] },
-              { id: 'business-strategy', title: 'Business Strategy', description: 'Learn strategic thinking and business planning', category: 'business', tags: ['business', 'strategy', 'management'] }
-            ];
-
-            let filteredCourses = courses;
-            if (category !== 'all') {
-              filteredCourses = courses.filter(course => course.category === category);
-            }
-            
-            const limitedCourses = filteredCourses.slice(0, limit);
-
-            return res.json({
-              jsonrpc: '2.0',
-              id: body.id,
-              result: {
-                content: [
-                  {
-                    type: 'text',
-                    text: `Found ${limitedCourses.length} courses:\n\n` + 
-                          limitedCourses.map((course, index) => 
-                            `${index + 1}. **${course.title}**\n   ${course.description}\n   Category: ${course.category}\n   Tags: ${course.tags.join(', ')}\n   ID: ${course.id}`
-                          ).join('\n\n')
-                  }
-                ]
-              }
-            });
-          }
-
-          if (name === 'get_course_details') {
-            const courseId = args?.course_id;
-            if (!courseId) {
-              return res.json({
-                jsonrpc: '2.0',
-                id: body.id,
-                error: {
-                  code: -32602,
-                  message: 'course_id is required'
+          try {
+            switch (name) {
+              case 'create_course':
+                // Ensure the user exists, create system user if needed
+                const userId = args.userId;
+                if (userId === 'system') {
+                  await prisma.user.upsert({
+                    where: { id: 'system' },
+                    create: {
+                      id: 'system',
+                      name: 'System',
+                      email: 'system@brainloop.local',
+                    },
+                    update: {}, // No updates needed if it exists
+                  });
                 }
-              });
-            }
 
-            const courseDetails = {
-              'js-fundamentals': {
-                id: 'js-fundamentals',
-                title: 'JavaScript Fundamentals',
-                description: 'Learn the basics of JavaScript programming',
-                category: 'programming',
-                duration: '4 weeks',
-                lessons: 12,
-                difficulty: 'beginner',
-                tags: ['javascript', 'programming', 'beginner'],
-                instructor: 'John Doe',
-                price: '$99'
-              },
-              'react-dev': {
-                id: 'react-dev',
-                title: 'React Development',
-                description: 'Build modern web apps with React',
-                category: 'programming',
-                duration: '6 weeks',
-                lessons: 18,
-                difficulty: 'intermediate',
-                tags: ['react', 'javascript', 'frontend'],
-                instructor: 'Jane Smith',
-                price: '$149'
-              }
-            };
+                const course = await prisma.course.create({
+                  data: {
+                    title: args.title,
+                    description: args.description,
+                    author: args.author || 'Unknown',
+                    tags: args.tags || [],
+                    hero: args.hero || '',
+                    icon: args.icon || '',
+                    isPrivate: args.isPrivate !== undefined ? args.isPrivate : true,
+                    userId: userId,
+                  },
+                  include: {
+                    units: {
+                      include: {
+                        lessons: true,
+                      },
+                    },
+                  },
+                });
 
-            const course = courseDetails[courseId];
-            if (!course) {
-              return res.json({
-                jsonrpc: '2.0',
-                id: body.id,
-                error: {
-                  code: -32602,
-                  message: `Course with ID '${courseId}' not found`
+                return res.json({
+                  jsonrpc: '2.0',
+                  id: body.id,
+                  result: {
+                    content: [
+                      {
+                        type: 'text',
+                        text: JSON.stringify(course, null, 2),
+                      },
+                    ],
+                  }
+                });
+
+              case 'get_user_progress':
+                const whereClause = { userId: args.userId };
+                if (args.courseId) {
+                  whereClause.courseId = args.courseId;
                 }
-              });
-            }
 
+                const progress = await prisma.progress.findMany({
+                  where: whereClause,
+                  include: {
+                    lesson: {
+                      select: {
+                        id: true,
+                        title: true,
+                      },
+                    },
+                    course: {
+                      select: {
+                        id: true,
+                        title: true,
+                      },
+                    },
+                  },
+                  orderBy: { updatedAt: 'desc' },
+                });
+
+                return res.json({
+                  jsonrpc: '2.0',
+                  id: body.id,
+                  result: {
+                    content: [
+                      {
+                        type: 'text',
+                        text: JSON.stringify(progress, null, 2),
+                      },
+                    ],
+                  }
+                });
+
+              case 'update_progress':
+                const existingProgress = await prisma.progress.findUnique({
+                  where: {
+                    userId_lessonId: {
+                      userId: args.userId,
+                      lessonId: args.lessonId,
+                    },
+                  },
+                });
+
+                const updateData = {
+                  status: args.status,
+                };
+
+                const updatedProgress = await prisma.progress.upsert({
+                  where: {
+                    userId_lessonId: {
+                      userId: args.userId,
+                      lessonId: args.lessonId,
+                    },
+                  },
+                  update: updateData,
+                  create: {
+                    userId: args.userId,
+                    lessonId: args.lessonId,
+                    courseId: (await prisma.lesson.findUnique({
+                      where: { id: args.lessonId },
+                      select: { unit: { select: { courseId: true } } },
+                    }))?.unit.courseId || '',
+                    status: args.status,
+                    ...updateData,
+                  },
+                });
+
+                return res.json({
+                  jsonrpc: '2.0',
+                  id: body.id,
+                  result: {
+                    content: [
+                      {
+                        type: 'text',
+                        text: JSON.stringify(updatedProgress, null, 2),
+                      },
+                    ],
+                  }
+                });
+
+              case 'get_review_schedule':
+                const schedule = await prisma.progress.findMany({
+                  where: {
+                    userId: args.userId,
+                    nextReview: {
+                      not: null,
+                    },
+                    ...(args.courseId ? { courseId: args.courseId } : {}),
+                  },
+                  include: {
+                    lesson: {
+                      select: {
+                        id: true,
+                        title: true,
+                      },
+                    },
+                    course: {
+                      select: {
+                        id: true,
+                        title: true,
+                      },
+                    },
+                  },
+                  orderBy: { nextReview: 'asc' },
+                });
+
+                return res.json({
+                  jsonrpc: '2.0',
+                  id: body.id,
+                  result: {
+                    content: [
+                      {
+                        type: 'text',
+                        text: JSON.stringify(schedule, null, 2),
+                      },
+                    ],
+                  }
+                });
+
+              case 'enroll_user':
+                const enrollment = await prisma.enrollment.create({
+                  data: {
+                    userId: args.userId,
+                    courseId: args.courseId,
+                  },
+                  include: {
+                    user: {
+                      select: {
+                        id: true,
+                        email: true,
+                      },
+                    },
+                    course: {
+                      select: {
+                        id: true,
+                        title: true,
+                      },
+                    },
+                  },
+                });
+
+                return res.json({
+                  jsonrpc: '2.0',
+                  id: body.id,
+                  result: {
+                    content: [
+                      {
+                        type: 'text',
+                        text: JSON.stringify(enrollment, null, 2),
+                      },
+                    ],
+                  }
+                });
+
+              case 'get_user_enrollments':
+                const enrollments = await prisma.enrollment.findMany({
+                  where: {
+                    userId: args.userId,
+                  },
+                  include: {
+                    course: {
+                      include: {
+                        units: {
+                          include: {
+                            lessons: {
+                              select: {
+                                id: true,
+                                title: true,
+                              },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                });
+
+                return res.json({
+                  jsonrpc: '2.0',
+                  id: body.id,
+                  result: {
+                    content: [
+                      {
+                        type: 'text',
+                        text: JSON.stringify(enrollments, null, 2),
+                      },
+                    ],
+                  }
+                });
+
+              case 'create_course_from_json':
+                const fullCourseData = args.courseData;
+                
+                // Validate required fields
+                if (!fullCourseData.title || !fullCourseData.description || !fullCourseData.userId) {
+                  return res.json({
+                    jsonrpc: '2.0',
+                    id: body.id,
+                    result: {
+                      content: [
+                        {
+                          type: 'text',
+                          text: JSON.stringify({ 
+                            error: 'Missing required fields: title, description, and userId are required' 
+                          }, null, 2),
+                        },
+                      ],
+                    }
+                  });
+                }
+
+                // Create the course shell first
+                const newCourse = await prisma.course.create({
+                  data: {
+                    title: fullCourseData.title,
+                    description: fullCourseData.description,
+                    author: fullCourseData.author || 'Unknown',
+                    tags: fullCourseData.tags || [],
+                    hero: fullCourseData.hero || '',
+                    icon: fullCourseData.icon || '',
+                    isPrivate: fullCourseData.isPrivate !== undefined ? fullCourseData.isPrivate : true,
+                    userId: fullCourseData.userId,
+                  }
+                });
+
+                return res.json({
+                  jsonrpc: '2.0',
+                  id: body.id,
+                  result: {
+                    content: [
+                      {
+                        type: 'text',
+                        text: JSON.stringify({ 
+                          message: 'Course created successfully!',
+                          courseId: newCourse.id,
+                          courseTitle: newCourse.title,
+                        }, null, 2),
+                      },
+                    ],
+                  }
+                });
+
+              case 'get_course_structure':
+                const courseStructure = await prisma.course.findUnique({
+                  where: { id: args.courseId },
+                  include: {
+                    units: {
+                      include: {
+                        lessons: {
+                          select: { id: true, title: true, order: true }
+                        }
+                      },
+                      orderBy: { order: 'asc' }
+                    }
+                  }
+                });
+
+                if (!courseStructure) {
+                  return res.json({
+                    jsonrpc: '2.0',
+                    id: body.id,
+                    result: {
+                      content: [
+                        {
+                          type: 'text',
+                          text: JSON.stringify({ 
+                            error: 'Course not found with the provided ID' 
+                          }, null, 2),
+                        },
+                      ],
+                    }
+                  });
+                }
+
+                return res.json({
+                  jsonrpc: '2.0',
+                  id: body.id,
+                  result: {
+                    content: [
+                      {
+                        type: 'text',
+                        text: JSON.stringify({ 
+                          courseId: courseStructure.id,
+                          title: courseStructure.title,
+                          description: courseStructure.description,
+                          totalUnits: courseStructure.units.length,
+                          totalLessons: courseStructure.units.reduce((sum, unit) => sum + unit.lessons.length, 0),
+                          units: courseStructure.units.map(unit => ({
+                            id: unit.id,
+                            title: unit.title,
+                            description: unit.description,
+                            order: unit.order,
+                            lessonsCount: unit.lessons.length,
+                            lessons: unit.lessons.map(lesson => ({
+                              id: lesson.id,
+                              title: lesson.title,
+                              order: lesson.order
+                            }))
+                          }))
+                        }, null, 2),
+                      },
+                    ],
+                  }
+                });
+
+              default:
+                return res.json({
+                  jsonrpc: '2.0',
+                  id: body.id,
+                  error: {
+                    code: -32601,
+                    message: `Unknown tool: ${name}`
+                  }
+                });
+            }
+          } catch (error) {
+            console.error('Tool execution error:', error);
             return res.json({
               jsonrpc: '2.0',
               id: body.id,
-              result: {
-                content: [
-                  {
-                    type: 'text',
-                    text: `**${course.title}**\n\n` +
-                          `Description: ${course.description}\n` +
-                          `Category: ${course.category}\n` +
-                          `Duration: ${course.duration}\n` +
-                          `Lessons: ${course.lessons}\n` +
-                          `Difficulty: ${course.difficulty}\n` +
-                          `Instructor: ${course.instructor}\n` +
-                          `Price: ${course.price}\n` +
-                          `Tags: ${course.tags.join(', ')}`
-                  }
-                ]
+              error: {
+                code: -32603,
+                message: `Tool execution failed: ${error.message}`
               }
             });
           }
-
-          if (name === 'search_courses') {
-            const query = args?.query?.toLowerCase() || '';
-            const tags = args?.tags || [];
-
-            const courses = [
-              { id: 'js-fundamentals', title: 'JavaScript Fundamentals', description: 'Learn the basics of JavaScript programming', category: 'programming', tags: ['javascript', 'programming', 'beginner'] },
-              { id: 'react-dev', title: 'React Development', description: 'Build modern web apps with React', category: 'programming', tags: ['react', 'javascript', 'frontend'] },
-              { id: 'node-backend', title: 'Node.js Backend', description: 'Server-side JavaScript development', category: 'programming', tags: ['nodejs', 'javascript', 'backend'] },
-              { id: 'db-design', title: 'Database Design', description: 'Design and optimize databases', category: 'programming', tags: ['database', 'sql', 'design'] },
-              { id: 'ui-design', title: 'UI/UX Design', description: 'Create beautiful and functional user interfaces', category: 'design', tags: ['design', 'ui', 'ux'] },
-              { id: 'business-strategy', title: 'Business Strategy', description: 'Learn strategic thinking and business planning', category: 'business', tags: ['business', 'strategy', 'management'] }
-            ];
-
-            let results = courses.filter(course => 
-              course.title.toLowerCase().includes(query) || 
-              course.description.toLowerCase().includes(query) ||
-              course.tags.some(tag => tag.toLowerCase().includes(query))
-            );
-
-            if (tags.length > 0) {
-              results = results.filter(course => 
-                tags.some(tag => course.tags.includes(tag))
-              );
-            }
-
-            return res.json({
-              jsonrpc: '2.0',
-              id: body.id,
-              result: {
-                content: [
-                  {
-                    type: 'text',
-                    text: `Found ${results.length} courses matching "${query}":\n\n` + 
-                          (results.length > 0 ? 
-                            results.map((course, index) => 
-                              `${index + 1}. **${course.title}**\n   ${course.description}\n   Tags: ${course.tags.join(', ')}\n   ID: ${course.id}`
-                            ).join('\n\n') :
-                            'No courses found matching your search criteria.'
-                          )
-                  }
-                ]
-              }
-            });
-          }
-
-          if (name === 'get_user_progress') {
-            const courseId = args?.course_id;
-            
-            const progress = {
-              total_courses: 6,
-              completed_courses: 2,
-              in_progress_courses: 1,
-              total_lessons: 45,
-              completed_lessons: 18,
-              current_streak: 7,
-              total_study_time: '24 hours'
-            };
-
-            let progressText = `**Your Learning Progress**\n\n` +
-                              `Total Courses: ${progress.total_courses}\n` +
-                              `Completed: ${progress.completed_courses}\n` +
-                              `In Progress: ${progress.in_progress_courses}\n` +
-                              `Total Lessons: ${progress.total_lessons}\n` +
-                              `Completed Lessons: ${progress.completed_lessons}\n` +
-                              `Current Streak: ${progress.current_streak} days\n` +
-                              `Total Study Time: ${progress.total_study_time}`;
-
-            if (courseId) {
-              progressText += `\n\n**Progress for Course ID: ${courseId}**\n` +
-                             `Status: In Progress\n` +
-                             `Lessons Completed: 8/12\n` +
-                             `Last Activity: 2 days ago`;
-            }
-
-            return res.json({
-              jsonrpc: '2.0',
-              id: body.id,
-              result: {
-                content: [
-                  {
-                    type: 'text',
-                    text: progressText
-                  }
-                ]
-              }
-            });
-          }
-
-          return res.json({
-            jsonrpc: '2.0',
-            id: body.id,
-            error: {
-              code: -32601,
-              message: `Unknown tool: ${name}`
-            }
-          });
         }
 
         if (method === 'resources/read') {
