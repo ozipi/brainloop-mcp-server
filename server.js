@@ -294,6 +294,21 @@ app.all('/api/mcp/server', async (req, res) => {
   }
 });
 
+// Redirect signin requests to main BRAINLOOP app
+app.get('/api/auth/signin', (req, res) => {
+  console.log('🔐 Redirecting signin to main BRAINLOOP app');
+
+  // Redirect to main app for authentication
+  const mainAppUrl = new URL('/api/auth/signin', 'https://brainloop.cc');
+
+  // Preserve all query parameters
+  Object.keys(req.query).forEach(key => {
+    mainAppUrl.searchParams.set(key, req.query[key]);
+  });
+
+  res.redirect(mainAppUrl.toString());
+});
+
 // OAuth authorize endpoint
 app.get('/api/auth/authorize', (req, res) => {
   const { client_id, response_type, scope, redirect_uri, state } = req.query;
@@ -306,8 +321,8 @@ app.get('/api/auth/authorize', (req, res) => {
     state
   });
 
-  // Redirect to signin with preserved parameters
-  const signinUrl = new URL('/api/auth/signin', process.env.NEXTAUTH_URL || 'https://mcp.brainloop.cc');
+  // Redirect to main app signin with preserved parameters
+  const signinUrl = new URL('/api/auth/signin', 'https://brainloop.cc');
   signinUrl.searchParams.set('callbackUrl', req.originalUrl);
 
   res.redirect(signinUrl.toString());
