@@ -523,10 +523,67 @@ app.all('/', async (req, res) => {
               tools: [
                 {
                   name: 'get_courses',
-                  description: 'Get list of available courses',
+                  description: 'Get list of all available courses in BRAINLOOP',
                   inputSchema: {
                     type: 'object',
-                    properties: {}
+                    properties: {
+                      limit: {
+                        type: 'number',
+                        description: 'Maximum number of courses to return',
+                        default: 10
+                      },
+                      category: {
+                        type: 'string',
+                        description: 'Filter courses by category',
+                        enum: ['programming', 'design', 'business', 'all']
+                      }
+                    }
+                  }
+                },
+                {
+                  name: 'get_course_details',
+                  description: 'Get detailed information about a specific course',
+                  inputSchema: {
+                    type: 'object',
+                    properties: {
+                      course_id: {
+                        type: 'string',
+                        description: 'The ID of the course to get details for'
+                      }
+                    },
+                    required: ['course_id']
+                  }
+                },
+                {
+                  name: 'search_courses',
+                  description: 'Search for courses by title, description, or tags',
+                  inputSchema: {
+                    type: 'object',
+                    properties: {
+                      query: {
+                        type: 'string',
+                        description: 'Search query to find courses'
+                      },
+                      tags: {
+                        type: 'array',
+                        items: { type: 'string' },
+                        description: 'Filter by specific tags'
+                      }
+                    },
+                    required: ['query']
+                  }
+                },
+                {
+                  name: 'get_user_progress',
+                  description: 'Get the current user\'s learning progress',
+                  inputSchema: {
+                    type: 'object',
+                    properties: {
+                      course_id: {
+                        type: 'string',
+                        description: 'Optional course ID to get progress for specific course'
+                      }
+                    }
                   }
                 }
               ]
@@ -556,7 +613,25 @@ app.all('/', async (req, res) => {
           console.log('🔧 Tool call:', { name, args });
 
           if (name === 'get_courses') {
-            // For now, return mock data
+            const limit = args?.limit || 10;
+            const category = args?.category || 'all';
+            
+            const courses = [
+              { id: 'js-fundamentals', title: 'JavaScript Fundamentals', description: 'Learn the basics of JavaScript programming', category: 'programming', tags: ['javascript', 'programming', 'beginner'] },
+              { id: 'react-dev', title: 'React Development', description: 'Build modern web apps with React', category: 'programming', tags: ['react', 'javascript', 'frontend'] },
+              { id: 'node-backend', title: 'Node.js Backend', description: 'Server-side JavaScript development', category: 'programming', tags: ['nodejs', 'javascript', 'backend'] },
+              { id: 'db-design', title: 'Database Design', description: 'Design and optimize databases', category: 'programming', tags: ['database', 'sql', 'design'] },
+              { id: 'ui-design', title: 'UI/UX Design', description: 'Create beautiful and functional user interfaces', category: 'design', tags: ['design', 'ui', 'ux'] },
+              { id: 'business-strategy', title: 'Business Strategy', description: 'Learn strategic thinking and business planning', category: 'business', tags: ['business', 'strategy', 'management'] }
+            ];
+
+            let filteredCourses = courses;
+            if (category !== 'all') {
+              filteredCourses = courses.filter(course => course.category === category);
+            }
+            
+            const limitedCourses = filteredCourses.slice(0, limit);
+
             return res.json({
               jsonrpc: '2.0',
               id: body.id,
@@ -564,7 +639,172 @@ app.all('/', async (req, res) => {
                 content: [
                   {
                     type: 'text',
-                    text: 'Available courses:\n1. JavaScript Fundamentals\n2. React Development\n3. Node.js Backend\n4. Database Design'
+                    text: `Found ${limitedCourses.length} courses:\n\n` + 
+                          limitedCourses.map((course, index) => 
+                            `${index + 1}. **${course.title}**\n   ${course.description}\n   Category: ${course.category}\n   Tags: ${course.tags.join(', ')}\n   ID: ${course.id}`
+                          ).join('\n\n')
+                  }
+                ]
+              }
+            });
+          }
+
+          if (name === 'get_course_details') {
+            const courseId = args?.course_id;
+            if (!courseId) {
+              return res.json({
+                jsonrpc: '2.0',
+                id: body.id,
+                error: {
+                  code: -32602,
+                  message: 'course_id is required'
+                }
+              });
+            }
+
+            const courseDetails = {
+              'js-fundamentals': {
+                id: 'js-fundamentals',
+                title: 'JavaScript Fundamentals',
+                description: 'Learn the basics of JavaScript programming',
+                category: 'programming',
+                duration: '4 weeks',
+                lessons: 12,
+                difficulty: 'beginner',
+                tags: ['javascript', 'programming', 'beginner'],
+                instructor: 'John Doe',
+                price: '$99'
+              },
+              'react-dev': {
+                id: 'react-dev',
+                title: 'React Development',
+                description: 'Build modern web apps with React',
+                category: 'programming',
+                duration: '6 weeks',
+                lessons: 18,
+                difficulty: 'intermediate',
+                tags: ['react', 'javascript', 'frontend'],
+                instructor: 'Jane Smith',
+                price: '$149'
+              }
+            };
+
+            const course = courseDetails[courseId];
+            if (!course) {
+              return res.json({
+                jsonrpc: '2.0',
+                id: body.id,
+                error: {
+                  code: -32602,
+                  message: `Course with ID '${courseId}' not found`
+                }
+              });
+            }
+
+            return res.json({
+              jsonrpc: '2.0',
+              id: body.id,
+              result: {
+                content: [
+                  {
+                    type: 'text',
+                    text: `**${course.title}**\n\n` +
+                          `Description: ${course.description}\n` +
+                          `Category: ${course.category}\n` +
+                          `Duration: ${course.duration}\n` +
+                          `Lessons: ${course.lessons}\n` +
+                          `Difficulty: ${course.difficulty}\n` +
+                          `Instructor: ${course.instructor}\n` +
+                          `Price: ${course.price}\n` +
+                          `Tags: ${course.tags.join(', ')}`
+                  }
+                ]
+              }
+            });
+          }
+
+          if (name === 'search_courses') {
+            const query = args?.query?.toLowerCase() || '';
+            const tags = args?.tags || [];
+
+            const courses = [
+              { id: 'js-fundamentals', title: 'JavaScript Fundamentals', description: 'Learn the basics of JavaScript programming', category: 'programming', tags: ['javascript', 'programming', 'beginner'] },
+              { id: 'react-dev', title: 'React Development', description: 'Build modern web apps with React', category: 'programming', tags: ['react', 'javascript', 'frontend'] },
+              { id: 'node-backend', title: 'Node.js Backend', description: 'Server-side JavaScript development', category: 'programming', tags: ['nodejs', 'javascript', 'backend'] },
+              { id: 'db-design', title: 'Database Design', description: 'Design and optimize databases', category: 'programming', tags: ['database', 'sql', 'design'] },
+              { id: 'ui-design', title: 'UI/UX Design', description: 'Create beautiful and functional user interfaces', category: 'design', tags: ['design', 'ui', 'ux'] },
+              { id: 'business-strategy', title: 'Business Strategy', description: 'Learn strategic thinking and business planning', category: 'business', tags: ['business', 'strategy', 'management'] }
+            ];
+
+            let results = courses.filter(course => 
+              course.title.toLowerCase().includes(query) || 
+              course.description.toLowerCase().includes(query) ||
+              course.tags.some(tag => tag.toLowerCase().includes(query))
+            );
+
+            if (tags.length > 0) {
+              results = results.filter(course => 
+                tags.some(tag => course.tags.includes(tag))
+              );
+            }
+
+            return res.json({
+              jsonrpc: '2.0',
+              id: body.id,
+              result: {
+                content: [
+                  {
+                    type: 'text',
+                    text: `Found ${results.length} courses matching "${query}":\n\n` + 
+                          (results.length > 0 ? 
+                            results.map((course, index) => 
+                              `${index + 1}. **${course.title}**\n   ${course.description}\n   Tags: ${course.tags.join(', ')}\n   ID: ${course.id}`
+                            ).join('\n\n') :
+                            'No courses found matching your search criteria.'
+                          )
+                  }
+                ]
+              }
+            });
+          }
+
+          if (name === 'get_user_progress') {
+            const courseId = args?.course_id;
+            
+            const progress = {
+              total_courses: 6,
+              completed_courses: 2,
+              in_progress_courses: 1,
+              total_lessons: 45,
+              completed_lessons: 18,
+              current_streak: 7,
+              total_study_time: '24 hours'
+            };
+
+            let progressText = `**Your Learning Progress**\n\n` +
+                              `Total Courses: ${progress.total_courses}\n` +
+                              `Completed: ${progress.completed_courses}\n` +
+                              `In Progress: ${progress.in_progress_courses}\n` +
+                              `Total Lessons: ${progress.total_lessons}\n` +
+                              `Completed Lessons: ${progress.completed_lessons}\n` +
+                              `Current Streak: ${progress.current_streak} days\n` +
+                              `Total Study Time: ${progress.total_study_time}`;
+
+            if (courseId) {
+              progressText += `\n\n**Progress for Course ID: ${courseId}**\n` +
+                             `Status: In Progress\n` +
+                             `Lessons Completed: 8/12\n` +
+                             `Last Activity: 2 days ago`;
+            }
+
+            return res.json({
+              jsonrpc: '2.0',
+              id: body.id,
+              result: {
+                content: [
+                  {
+                    type: 'text',
+                    text: progressText
                   }
                 ]
               }
