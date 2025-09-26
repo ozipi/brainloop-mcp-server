@@ -37,11 +37,32 @@ app.use((req, res, next) => {
 
 // Authentication helper
 async function authenticateRequest(req) {
+  console.log("🔐 Authentication attempt:", {
+    hasAuthHeader: !!authHeader,
+    authHeaderPrefix: authHeader ? authHeader.substring(0, 20) + "..." : "none",
+    userAgent: req.headers["user-agent"]?.substring(0, 50) || "unknown"
+  });
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  console.log("🎫 Token received:", {
+    tokenLength: token.length,
+    tokenStart: token.substring(0, 20) + "..."
+  });
     return null;
+  console.log("✅ Token decoded successfully:", {
+    sub: decoded.sub,
+    aud: decoded.aud,
+    scope: decoded.scope,
+    exp: decoded.exp,
+    iat: decoded.iat
+  });
   }
+  console.log("🔍 Scope validation:", {
+    scopes,
+    hasValidScope,
+    requiredScopes: ["mcp:read", "mcp:write"]
+  });
 
   const token = authHeader.substring(7);
 
@@ -52,11 +73,20 @@ async function authenticateRequest(req) {
     // Validate that the token has proper MCP scopes
     const scopes = decoded.scope ? decoded.scope.split(' ') : [];
     const hasValidScope = scopes.some(scope => scope.startsWith('mcp:'));
+  console.log("✅ User authenticated successfully:", {
+    userId: user.id,
+    email: user.email,
+    name: user.name
+  });
 
     if (!hasValidScope) {
       console.log('❌ Token missing required MCP scopes');
       return null;
     }
+  console.log("❌ Token verification failed:", {
+    error: error.message,
+    tokenStart: token.substring(0, 20) + "..."
+  });
 
     const user = await prisma.user.findUnique({
       where: { id: decoded.sub }
