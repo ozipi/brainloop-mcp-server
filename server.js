@@ -154,6 +154,11 @@ app.get('/api/mcp/sse', async (req, res) => {
 
 // MCP Server main endpoint
 app.all('/api/mcp/server', async (req, res) => {
+  // Add MCP-specific headers to help Claude web recognize this as MCP server
+  res.setHeader("X-MCP-Version", "2024-11-05");
+  res.setHeader("X-MCP-Server", "BRAINLOOP MCP Server");
+  res.setHeader("X-MCP-Protocol", "json-rpc-2.0");
+  res.setHeader("Content-Type", "application/json");
   const userAgent = req.headers['user-agent'] || 'unknown';
   const origin = req.headers.origin || '';
   const referer = req.headers.referer || '';
