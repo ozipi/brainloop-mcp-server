@@ -76,7 +76,7 @@ app.get('/.well-known/oauth-authorization-server', (req, res) => {
 
   res.json({
     issuer: baseUrl,
-    authorization_endpoint: `${baseUrl}/api/auth/signin`,
+    authorization_endpoint: `${baseUrl}/api/auth/authorize`,
     token_endpoint: `${baseUrl}/api/auth/token`,
     userinfo_endpoint: `${baseUrl}/api/auth/userinfo`,
     jwks_uri: `${baseUrl}/.well-known/jwks.json`,
@@ -84,7 +84,7 @@ app.get('/.well-known/oauth-authorization-server', (req, res) => {
     grant_types_supported: ['authorization_code'],
     subject_types_supported: ['public'],
     id_token_signing_alg_values_supported: ['HS256'],
-    scopes_supported: ['openid', 'email', 'profile'],
+    scopes_supported: ['openid', 'email', 'profile', 'mcp:read', 'mcp:write'],
     claims_supported: ['iss', 'sub', 'aud', 'exp', 'iat', 'email', 'name']
   });
 });
@@ -355,6 +355,56 @@ app.get('/api/auth/callback', async (req, res) => {
     code,
     state,
     message: 'Authorization successful - use this code to get access token'
+  });
+});
+
+// OAuth userinfo endpoint
+app.get('/api/auth/userinfo', async (req, res) => {
+  console.log('👤 Userinfo request received');
+  
+  try {
+    const authContext = await authenticateRequest(req);
+    
+    if (!authContext) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Get user info from database
+    const user = await prisma.user.findUnique({
+      where: { id: authContext.userId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        image: true
+      }
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({
+      sub: user.id,
+      name: user.name,
+      email: user.email,
+      picture: user.image,
+      email_verified: true
+    });
+  } catch (error) {
+    console.error('Userinfo error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// JWKS endpoint for OAuth discovery
+app.get('/.well-known/jwks.json', (req, res) => {
+  console.log('🔑 JWKS request received');
+  
+  // For now, return an empty JWKS since we're using HS256
+  // In production, you'd want to use RS256 with proper key rotation
+  res.json({
+    keys: []
   });
 });
 
