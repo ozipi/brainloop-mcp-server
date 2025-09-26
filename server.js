@@ -223,7 +223,7 @@ app.all('/api/mcp/server', async (req, res) => {
             },
             serverInfo: {
               name: 'BRAINLOOP MCP Server',
-              version: '1.0.0',
+              version: '1.1.0',
               description: 'MCP server for BRAINLOOP spaced repetition learning platform'
             }
           }
@@ -525,7 +525,7 @@ app.all('/', async (req, res) => {
               },
               serverInfo: {
                 name: 'BRAINLOOP MCP Server',
-                version: '1.0.0',
+                version: '1.1.0',
                 description: 'MCP server for BRAINLOOP spaced repetition learning platform'
               }
             }
@@ -772,7 +772,7 @@ app.all('/', async (req, res) => {
   // For other requests, return MCP server info
   res.json({
     name: 'BRAINLOOP MCP Server',
-    version: '1.0.0',
+    version: '1.1.0',
     description: 'MCP server for BRAINLOOP spaced repetition learning platform',
     endpoints: {
       mcp: '/api/mcp/server',
