@@ -1,0 +1,21 @@
+{
+  "name": "brainloop-mcp-server",
+  "version": "1.0.0",
+  "description": "Minimal MCP server for BRAINLOOP - Railway deployment",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "jsonwebtoken": "^9.0.2",
+    "@prisma/client": "^5.7.1",
+    "crypto": "^1.0.1",
+    "next-auth": "^4.24.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
