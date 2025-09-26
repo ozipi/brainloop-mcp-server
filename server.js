@@ -46,13 +46,24 @@ async function authenticateRequest(req) {
   const token = authHeader.substring(7);
 
   try {
+    // Verify JWT token issued by main BRAINLOOP app
     const decoded = jwt.verify(token, JWT_SECRET);
+
+    // Validate that the token has proper MCP scopes
+    const scopes = decoded.scope ? decoded.scope.split(' ') : [];
+    const hasValidScope = scopes.some(scope => scope.startsWith('mcp:'));
+
+    if (!hasValidScope) {
+      console.log('❌ Token missing required MCP scopes');
+      return null;
+    }
 
     const user = await prisma.user.findUnique({
       where: { id: decoded.sub }
     });
 
     if (!user) {
+      console.log('❌ User not found in database');
       return null;
     }
 
@@ -60,7 +71,7 @@ async function authenticateRequest(req) {
       isAuthenticated: true,
       userId: decoded.sub,
       clientId: decoded.aud,
-      scopes: decoded.scope ? decoded.scope.split(' ') : [],
+      scopes: scopes,
       resources: ['*'],
       audience: ['mcp-server'],
     };
@@ -70,49 +81,9 @@ async function authenticateRequest(req) {
   }
 }
 
-// OAuth2 Authorization Server Discovery (RFC 8414)
-app.get('/.well-known/oauth-authorization-server', (req, res) => {
-  const baseUrl = process.env.NEXTAUTH_URL || 'https://mcp.brainloop.cc';
+// Remove OAuth discovery - OAuth is handled by main BRAINLOOP app
 
-  res.json({
-    issuer: baseUrl,
-    authorization_endpoint: `${baseUrl}/api/auth/authorize`,
-    token_endpoint: `${baseUrl}/api/auth/token`,
-    userinfo_endpoint: `${baseUrl}/api/auth/userinfo`,
-    jwks_uri: `${baseUrl}/.well-known/jwks.json`,
-    response_types_supported: ['code'],
-    grant_types_supported: ['authorization_code'],
-    subject_types_supported: ['public'],
-    id_token_signing_alg_values_supported: ['HS256'],
-    scopes_supported: ['openid', 'email', 'profile', 'mcp:read', 'mcp:write'],
-    claims_supported: ['iss', 'sub', 'aud', 'exp', 'iat', 'email', 'name'],
-    // Indicate this server doesn't support popup flows due to X-Frame-Options
-    'ui_locales_supported': ['en'],
-    'display_values_supported': ['page'], // Only supports full page redirects, not popups
-    'claim_types_supported': ['normal']
-  });
-});
-
-// MCP Client Configuration Discovery
-app.get('/.well-known/mcp-client-config', (req, res) => {
-  const baseUrl = process.env.NEXTAUTH_URL || 'https://mcp.brainloop.cc';
-
-  res.json({
-    client_name: "BRAINLOOP MCP Client",
-    client_id: "brainloop-mcp-client",
-    redirect_uris: [`${baseUrl}/api/auth/callback`],
-    scopes: ["mcp:read", "mcp:write"],
-    mcp_transport: {
-      type: "http",
-      endpoint: `${baseUrl}/api/mcp/server`
-    },
-    auth: {
-      type: "oauth2",
-      authorization_endpoint: `${baseUrl}/api/auth/authorize`,
-      token_endpoint: `${baseUrl}/api/auth/token`
-    }
-  });
-});
+// MCP Client Configuration Discovery removed - handled by main BRAINLOOP app
 
 // SSE endpoint for Claude web
 app.get('/api/mcp/sse', async (req, res) => {
@@ -223,7 +194,7 @@ app.all('/api/mcp/server', async (req, res) => {
             },
             serverInfo: {
               name: 'BRAINLOOP MCP Server',
-              version: '1.2.0',
+              version: '2.0.0',
               description: 'MCP server for BRAINLOOP spaced repetition learning platform'
             }
           }
@@ -298,176 +269,8 @@ app.all('/api/mcp/server', async (req, res) => {
   }
 });
 
-// Redirect signin requests to main BRAINLOOP app
-app.get('/api/auth/signin', (req, res) => {
-  console.log('🔐 Redirecting signin to main BRAINLOOP app');
-
-  // Redirect to main app for authentication
-  const mainAppUrl = new URL('/api/auth/signin', 'https://brainloop.cc');
-
-  // Preserve all query parameters
-  Object.keys(req.query).forEach(key => {
-    mainAppUrl.searchParams.set(key, req.query[key]);
-  });
-
-  res.redirect(mainAppUrl.toString());
-});
-
-// OAuth authorize endpoint - redirect to main BRAINLOOP app
-app.get('/api/auth/authorize', (req, res) => {
-  const { client_id, response_type, scope, redirect_uri, state, code_challenge, code_challenge_method } = req.query;
-
-  console.log('🔑 OAuth authorize request:', {
-    client_id,
-    response_type,
-    scope,
-    redirect_uri,
-    state,
-    code_challenge,
-    code_challenge_method
-  });
-
-  // Redirect to main BRAINLOOP app for OAuth with Google/GitHub
-  // The main app has proper NextAuth configuration with OAuth providers
-  const mainAppOAuthUrl = new URL('/api/auth/signin', 'https://brainloop.cc');
-
-  // Add all the OAuth parameters
-  mainAppOAuthUrl.searchParams.set('callbackUrl',
-    `https://mcp.brainloop.cc/api/auth/callback?${new URLSearchParams({
-      state: state || '',
-      redirect_uri: redirect_uri || '',
-      client_id: client_id || ''
-    }).toString()}`
-  );
-
-  console.log('🔄 Redirecting to main app OAuth:', mainAppOAuthUrl.toString());
-
-  res.redirect(302, mainAppOAuthUrl.toString());
-});
-
-// OAuth callback endpoint (handles redirect from main app)
-app.get('/api/auth/callback', async (req, res) => {
-  const { code, state, error } = req.query;
-
-  console.log('🔄 OAuth callback received:', {
-    hasCode: !!code,
-    state,
-    error,
-    userAgent: req.headers['user-agent']
-  });
-
-  if (error) {
-    console.error('❌ OAuth error:', error);
-    return res.status(400).json({ error: 'OAuth authentication failed', details: error });
-  }
-
-  if (!code) {
-    console.error('❌ No authorization code received');
-    return res.status(400).json({ error: 'Missing authorization code' });
-  }
-
-  // This callback should redirect to Claude, but since Claude called this directly,
-  // we need to return the code for Claude to exchange for tokens
-  res.json({
-    code,
-    state,
-    message: 'Authorization successful - use this code to get access token'
-  });
-});
-
-// OAuth userinfo endpoint
-app.get('/api/auth/userinfo', async (req, res) => {
-  console.log('👤 Userinfo request received');
-  
-  try {
-    const authContext = await authenticateRequest(req);
-    
-    if (!authContext) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-
-    // Get user info from database
-    const user = await prisma.user.findUnique({
-      where: { id: authContext.userId },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        image: true
-      }
-    });
-
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    res.json({
-      sub: user.id,
-      name: user.name,
-      email: user.email,
-      picture: user.image,
-      email_verified: true
-    });
-  } catch (error) {
-    console.error('Userinfo error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// JWKS endpoint for OAuth discovery
-app.get('/.well-known/jwks.json', (req, res) => {
-  console.log('🔑 JWKS request received');
-  
-  // For now, return an empty JWKS since we're using HS256
-  // In production, you'd want to use RS256 with proper key rotation
-  res.json({
-    keys: []
-  });
-});
-
-// OAuth token endpoint
-app.post('/api/auth/token', async (req, res) => {
-  const { grant_type, code, client_id, redirect_uri } = req.body;
-
-  console.log('🎫 OAuth token request:', {
-    grant_type,
-    code,
-    client_id,
-    redirect_uri
-  });
-
-  if (!code) {
-    return res.status(400).json({ error: 'Missing authorization code' });
-  }
-
-  try {
-    // In a real implementation, you'd validate the authorization code against stored codes
-    // For now, we'll look up the user who authorized this code
-    // Since we don't store auth codes, we'll create a token for the authenticated user
-
-    // Generate a JWT token for the user
-    const token = jwt.sign(
-      {
-        sub: 'user-authenticated', // This should be the actual user ID from the auth code
-        aud: client_id,
-        scope: 'mcp:read mcp:write',
-        iat: Math.floor(Date.now() / 1000),
-        exp: Math.floor(Date.now() / 1000) + 3600
-      },
-      JWT_SECRET
-    );
-
-    res.json({
-      access_token: token,
-      token_type: 'Bearer',
-      expires_in: 3600,
-      scope: 'mcp:read mcp:write'
-    });
-  } catch (error) {
-    console.error('🎫 Token generation error:', error);
-    res.status(500).json({ error: 'Token generation failed' });
-  }
-});
+// OAuth endpoints removed - OAuth is handled by main BRAINLOOP app at brainloop.cc
+// This server only handles MCP protocol requests
 
 // Root path handler - handle MCP requests directly
 app.all('/', async (req, res) => {
@@ -525,7 +328,7 @@ app.all('/', async (req, res) => {
               },
               serverInfo: {
                 name: 'BRAINLOOP MCP Server',
-                version: '1.2.0',
+                version: '2.0.0',
                 description: 'MCP server for BRAINLOOP spaced repetition learning platform'
               }
             }
@@ -772,18 +575,14 @@ app.all('/', async (req, res) => {
   // For other requests, return MCP server info
   res.json({
     name: 'BRAINLOOP MCP Server',
-    version: '1.2.0',
-    description: 'MCP server for BRAINLOOP spaced repetition learning platform',
+    version: '2.0.0',
+    description: 'Dedicated MCP protocol server for BRAINLOOP (OAuth handled by main app)',
     endpoints: {
       mcp: '/api/mcp/server',
       sse: '/api/mcp/sse',
-      auth: '/api/auth/authorize',
       health: '/health'
     },
-    discovery: {
-      oauth: '/.well-known/oauth-authorization-server',
-      mcp_config: '/.well-known/mcp-client-config'
-    }
+    auth_note: 'Authentication handled by https://brainloop.cc'
   });
 });
 
