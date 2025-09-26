@@ -99,8 +99,8 @@ app.get('/.well-known/mcp-client-config', (req, res) => {
     redirect_uris: [`${baseUrl}/api/auth/callback`],
     scopes: ["mcp:read", "mcp:write"],
     mcp_transport: {
-      type: "sse",
-      endpoint: `${baseUrl}/api/mcp/sse`
+      type: "http",
+      endpoint: `${baseUrl}/api/mcp/server`
     },
     auth: {
       type: "oauth2",
