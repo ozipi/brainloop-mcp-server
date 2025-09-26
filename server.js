@@ -710,6 +710,7 @@ app.all('/', async (req, res) => {
 
         // If we get here, it's a method we don't handle without auth
         console.log('❌ Unhandled method without auth:', method);
+        console.log('🔍 Full request body:', JSON.stringify(body, null, 2));
         return res.json({
           jsonrpc: '2.0',
           id: body.id,
