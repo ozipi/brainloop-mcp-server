@@ -328,6 +328,36 @@ app.get('/api/auth/authorize', (req, res) => {
   res.redirect(signinUrl.toString());
 });
 
+// OAuth callback endpoint (handles redirect from main app)
+app.get('/api/auth/callback', async (req, res) => {
+  const { code, state, error } = req.query;
+
+  console.log('🔄 OAuth callback received:', {
+    hasCode: !!code,
+    state,
+    error,
+    userAgent: req.headers['user-agent']
+  });
+
+  if (error) {
+    console.error('❌ OAuth error:', error);
+    return res.status(400).json({ error: 'OAuth authentication failed', details: error });
+  }
+
+  if (!code) {
+    console.error('❌ No authorization code received');
+    return res.status(400).json({ error: 'Missing authorization code' });
+  }
+
+  // This callback should redirect to Claude, but since Claude called this directly,
+  // we need to return the code for Claude to exchange for tokens
+  res.json({
+    code,
+    state,
+    message: 'Authorization successful - use this code to get access token'
+  });
+});
+
 // OAuth token endpoint
 app.post('/api/auth/token', async (req, res) => {
   const { grant_type, code, client_id, redirect_uri } = req.body;
@@ -339,25 +369,37 @@ app.post('/api/auth/token', async (req, res) => {
     redirect_uri
   });
 
-  // In a real implementation, you'd validate the authorization code
-  // For now, return a mock JWT token
-  const token = jwt.sign(
-    {
-      sub: 'user-123',
-      aud: client_id,
-      scope: 'mcp:read mcp:write',
-      iat: Math.floor(Date.now() / 1000),
-      exp: Math.floor(Date.now() / 1000) + 3600
-    },
-    JWT_SECRET
-  );
+  if (!code) {
+    return res.status(400).json({ error: 'Missing authorization code' });
+  }
 
-  res.json({
-    access_token: token,
-    token_type: 'Bearer',
-    expires_in: 3600,
-    scope: 'mcp:read mcp:write'
-  });
+  try {
+    // In a real implementation, you'd validate the authorization code against stored codes
+    // For now, we'll look up the user who authorized this code
+    // Since we don't store auth codes, we'll create a token for the authenticated user
+
+    // Generate a JWT token for the user
+    const token = jwt.sign(
+      {
+        sub: 'user-authenticated', // This should be the actual user ID from the auth code
+        aud: client_id,
+        scope: 'mcp:read mcp:write',
+        iat: Math.floor(Date.now() / 1000),
+        exp: Math.floor(Date.now() / 1000) + 3600
+      },
+      JWT_SECRET
+    );
+
+    res.json({
+      access_token: token,
+      token_type: 'Bearer',
+      expires_in: 3600,
+      scope: 'mcp:read mcp:write'
+    });
+  } catch (error) {
+    console.error('🎫 Token generation error:', error);
+    res.status(500).json({ error: 'Token generation failed' });
+  }
 });
 
 // Health check
