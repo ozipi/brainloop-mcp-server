@@ -313,7 +313,7 @@ app.get('/api/auth/signin', (req, res) => {
   res.redirect(mainAppUrl.toString());
 });
 
-// OAuth authorize endpoint - create a popup-friendly authorization page
+// OAuth authorize endpoint - redirect to main BRAINLOOP app
 app.get('/api/auth/authorize', (req, res) => {
   const { client_id, response_type, scope, redirect_uri, state, code_challenge, code_challenge_method } = req.query;
 
@@ -327,141 +327,22 @@ app.get('/api/auth/authorize', (req, res) => {
     code_challenge_method
   });
 
-  // Create a popup-friendly authorization page
-  const authPageHTML = `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BRAINLOOP Authorization</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            max-width: 400px;
-            margin: 50px auto;
-            padding: 20px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .auth-container {
-            background: white;
-            border-radius: 12px;
-            padding: 30px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-            text-align: center;
-        }
-        .logo {
-            color: #c43300;
-            font-size: 28px;
-            font-weight: bold;
-            margin-bottom: 20px;
-        }
-        .description {
-            color: #666;
-            margin-bottom: 25px;
-            line-height: 1.5;
-        }
-        .auth-button {
-            background: #c43300;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 6px;
-            font-size: 16px;
-            cursor: pointer;
-            width: 100%;
-            margin-bottom: 15px;
-            text-decoration: none;
-            display: inline-block;
-            box-sizing: border-box;
-        }
-        .auth-button:hover {
-            background: #a52c00;
-        }
-        .cancel-button {
-            background: #f5f5f5;
-            color: #666;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 6px;
-            font-size: 14px;
-            cursor: pointer;
-            width: 100%;
-        }
-        .cancel-button:hover {
-            background: #e0e0e0;
-        }
-        .scopes {
-            background: #f8f9fa;
-            border-radius: 6px;
-            padding: 15px;
-            margin: 20px 0;
-            text-align: left;
-        }
-        .scopes h4 {
-            margin: 0 0 10px 0;
-            color: #333;
-        }
-        .scope-item {
-            color: #666;
-            font-size: 14px;
-            margin: 5px 0;
-        }
-    </style>
-</head>
-<body>
-    <div class="auth-container">
-        <div class="logo">BRAINLOOP</div>
-        <div class="description">
-            Claude wants to connect to your BRAINLOOP account to access your learning data and courses.
-        </div>
+  // Redirect to main BRAINLOOP app for OAuth with Google/GitHub
+  // The main app has proper NextAuth configuration with OAuth providers
+  const mainAppOAuthUrl = new URL('/api/auth/signin', 'https://brainloop.cc');
 
-        <div class="scopes">
-            <h4>Requested permissions:</h4>
-            <div class="scope-item">• Read your profile information</div>
-            <div class="scope-item">• Access your courses and progress</div>
-            <div class="scope-item">• View your learning statistics</div>
-        </div>
+  // Add all the OAuth parameters
+  mainAppOAuthUrl.searchParams.set('callbackUrl',
+    `https://mcp.brainloop.cc/api/auth/callback?${new URLSearchParams({
+      state: state || '',
+      redirect_uri: redirect_uri || '',
+      client_id: client_id || ''
+    }).toString()}`
+  );
 
-        <a href="https://brainloop.cc/api/auth/signin?callbackUrl=${encodeURIComponent(req.originalUrl)}"
-           class="auth-button">
-            Continue with BRAINLOOP
-        </a>
+  console.log('🔄 Redirecting to main app OAuth:', mainAppOAuthUrl.toString());
 
-        <button onclick="window.close()" class="cancel-button">
-            Cancel
-        </button>
-    </div>
-
-    <script>
-        // If this is opened in a popup and the user is already authenticated,
-        // we can try to handle the OAuth flow automatically
-        console.log('OAuth authorization page loaded');
-
-        // Listen for messages from the parent window
-        window.addEventListener('message', function(event) {
-            if (event.data.type === 'oauth_complete') {
-                window.close();
-            }
-        });
-    </script>
-</body>
-</html>
-  `;
-
-  // Set headers to allow this page to be displayed in iframes/popups
-  res.setHeader('X-Frame-Options', 'ALLOWALL');
-  res.setHeader('Content-Security-Policy', "frame-ancestors *;");
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.setHeader('Content-Type', 'text/html');
-
-  res.send(authPageHTML);
+  res.redirect(mainAppOAuthUrl.toString());
 });
 
 // OAuth callback endpoint (handles redirect from main app)
