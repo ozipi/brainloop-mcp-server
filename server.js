@@ -178,7 +178,7 @@ app.all('/api/mcp/server', async (req, res) => {
     const method = body.method || 'unknown';
 
     // Allow Claude web to perform initialize and discovery calls without authentication
-    if (isClaudeWeb && (method === 'initialize')) {
+    if (isClaudeWeb && (method === 'initialize' || method === 'notifications/initialized')) {
       console.log('🔓 Allowing Claude web discovery call without auth:', method);
 
       if (method === 'initialize') {
@@ -194,7 +194,7 @@ app.all('/api/mcp/server', async (req, res) => {
             },
             serverInfo: {
               name: 'BRAINLOOP MCP Server',
-              version: '2.0.0',
+              version: '2.0.1',
               description: 'MCP server for BRAINLOOP spaced repetition learning platform'
             }
           }
@@ -328,7 +328,7 @@ app.all('/', async (req, res) => {
               },
               serverInfo: {
                 name: 'BRAINLOOP MCP Server',
-                version: '2.0.0',
+                version: '2.0.1',
                 description: 'MCP server for BRAINLOOP spaced repetition learning platform'
               }
             }
@@ -575,7 +575,7 @@ app.all('/', async (req, res) => {
   // For other requests, return MCP server info
   res.json({
     name: 'BRAINLOOP MCP Server',
-    version: '2.0.0',
+    version: '2.0.1',
     description: 'Dedicated MCP protocol server for BRAINLOOP (OAuth handled by main app)',
     endpoints: {
       mcp: '/api/mcp/server',
