@@ -484,8 +484,15 @@ app.all('/', async (req, res) => {
       const body = req.body || {};
       const method = body.method || 'unknown';
 
+      console.log('🔍 MCP Request details:', {
+        method,
+        id: body.id,
+        params: body.params,
+        hasAuth: !!req.headers.authorization
+      });
+
       // Allow Claude web to perform initialize and discovery calls without authentication
-      if (isClaudeWeb && (method === 'initialize' || method === 'tools/list' || method === 'resources/list')) {
+      if (isClaudeWeb && (method === 'initialize' || method === 'tools/list' || method === 'resources/list' || method === 'tools/call' || method === 'resources/read' || method === 'notifications/initialized')) {
         console.log('🔓 Allowing Claude web discovery call without auth:', method);
 
         if (method === 'initialize') {
@@ -543,6 +550,93 @@ app.all('/', async (req, res) => {
             }
           });
         }
+
+        if (method === 'tools/call') {
+          const { name, arguments: args } = body.params || {};
+          console.log('🔧 Tool call:', { name, args });
+
+          if (name === 'get_courses') {
+            // For now, return mock data
+            return res.json({
+              jsonrpc: '2.0',
+              id: body.id,
+              result: {
+                content: [
+                  {
+                    type: 'text',
+                    text: 'Available courses:\n1. JavaScript Fundamentals\n2. React Development\n3. Node.js Backend\n4. Database Design'
+                  }
+                ]
+              }
+            });
+          }
+
+          return res.json({
+            jsonrpc: '2.0',
+            id: body.id,
+            error: {
+              code: -32601,
+              message: `Unknown tool: ${name}`
+            }
+          });
+        }
+
+        if (method === 'resources/read') {
+          const { uri } = body.params || {};
+          console.log('📖 Resource read:', { uri });
+
+          if (uri === 'brainloop://courses') {
+            return res.json({
+              jsonrpc: '2.0',
+              id: body.id,
+              result: {
+                contents: [
+                  {
+                    uri: 'brainloop://courses',
+                    mimeType: 'application/json',
+                    text: JSON.stringify({
+                      courses: [
+                        { id: 1, title: 'JavaScript Fundamentals', description: 'Learn the basics of JavaScript' },
+                        { id: 2, title: 'React Development', description: 'Build modern web apps with React' },
+                        { id: 3, title: 'Node.js Backend', description: 'Server-side JavaScript development' },
+                        { id: 4, title: 'Database Design', description: 'Design and optimize databases' }
+                      ]
+                    }, null, 2)
+                  }
+                ]
+              }
+            });
+          }
+
+          return res.json({
+            jsonrpc: '2.0',
+            id: body.id,
+            error: {
+              code: -32602,
+              message: `Resource not found: ${uri}`
+            }
+          });
+        }
+
+        if (method === 'notifications/initialized') {
+          console.log('✅ Client initialized notification received');
+          return res.json({
+            jsonrpc: '2.0',
+            id: body.id,
+            result: {}
+          });
+        }
+
+        // If we get here, it's a method we don't handle without auth
+        console.log('❌ Unhandled method without auth:', method);
+        return res.json({
+          jsonrpc: '2.0',
+          id: body.id,
+          error: {
+            code: -32601,
+            message: `Method not found: ${method}`
+          }
+        });
       }
 
       // For other requests, require authentication
