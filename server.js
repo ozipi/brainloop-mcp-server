@@ -178,7 +178,7 @@ app.all('/api/mcp/server', async (req, res) => {
     const method = body.method || 'unknown';
 
     // Allow Claude web to perform initialize and discovery calls without authentication
-    if (isClaudeWeb && (method === 'initialize' || method === 'notifications/initialized')) {
+    if (isClaudeWeb && (method === 'initialize' || method === 'notifications/initialized' || method === 'tools/list' || method === 'resources/list')) {
       console.log('🔓 Allowing Claude web discovery call without auth:', method);
 
       if (method === 'initialize') {
@@ -194,7 +194,7 @@ app.all('/api/mcp/server', async (req, res) => {
             },
             serverInfo: {
               name: 'BRAINLOOP MCP Server',
-              version: '2.0.1',
+              version: '2.0.3',
               description: 'MCP server for BRAINLOOP spaced repetition learning platform'
             }
           }
@@ -312,7 +312,7 @@ app.all('/', async (req, res) => {
       });
 
       // Allow Claude web to perform initialize and discovery calls without authentication
-      if (isClaudeWeb && (method === 'initialize' || method === 'notifications/initialized')) {
+      if (isClaudeWeb && (method === 'initialize' || method === 'notifications/initialized' || method === 'tools/list' || method === 'resources/list')) {
         console.log('🔓 Allowing Claude web discovery call without auth:', method);
 
         if (method === 'initialize') {
@@ -328,7 +328,7 @@ app.all('/', async (req, res) => {
               },
               serverInfo: {
                 name: 'BRAINLOOP MCP Server',
-                version: '2.0.1',
+                version: '2.0.3',
                 description: 'MCP server for BRAINLOOP spaced repetition learning platform'
               }
             }
@@ -575,7 +575,7 @@ app.all('/', async (req, res) => {
   // For other requests, return MCP server info
   res.json({
     name: 'BRAINLOOP MCP Server',
-    version: '2.0.1',
+    version: '2.0.3',
     description: 'Dedicated MCP protocol server for BRAINLOOP (OAuth handled by main app)',
     endpoints: {
       mcp: '/api/mcp/server',
@@ -596,8 +596,8 @@ app.listen(port, () => {
   console.log(`🚀 BRAINLOOP MCP Server running on port ${port}`);
   console.log(`📡 SSE endpoint: /api/mcp/sse`);
   console.log(`🤖 MCP endpoint: /api/mcp/server`);
-  console.log(`🔐 OAuth discovery: /.well-known/oauth-authorization-server`);
-  console.log(`✅ Dedicated MCP server repository deployed successfully`);
+  console.log(`🔑 Authentication: Handled by https://brainloop.cc`);
+  console.log(`✅ Dedicated MCP protocol server v2.0.1 deployed successfully`);
 });
 
 // Graceful shutdown
