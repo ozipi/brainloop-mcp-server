@@ -115,14 +115,142 @@ async function authenticateRequest(req) {
 
 // MCP Client Configuration Discovery removed - handled by main BRAINLOOP app
 
+// MCP Client Configuration Discovery
+app.get("/.well-known/mcp-client-config", (req, res) => {
+  const baseUrl = process.env.NEXTAUTH_URL || "https://mcp.brainloop.cc";
+
+  res.json({
+    client_name: "BRAINLOOP MCP Client",
+    client_id: "brainloop-mcp-client",
+    redirect_uris: [`${baseUrl}/api/auth/callback`],
+    scopes: ["mcp:read", "mcp:write"],
+    mcp_transport: {
+      type: "http",
+      endpoint: `${baseUrl}/api/mcp/server`
+    },
+    auth: {
+      type: "oauth2",
+      authorization_endpoint: `${baseUrl}/api/auth/authorize`,
+      token_endpoint: `${baseUrl}/api/auth/token`
+    }
+  });
+});
+
 // SSE endpoint for Claude web
 app.get('/api/mcp/sse', async (req, res) => {
+
+// OAuth2 Authorization Server Discovery (RFC 8414)
+app.get("/.well-known/oauth-authorization-server", (req, res) => {
+  const baseUrl = process.env.NEXTAUTH_URL || "https://mcp.brainloop.cc";
+
+  res.json({
+    issuer: baseUrl,
+    authorization_endpoint: `${baseUrl}/api/auth/authorize`,
+    token_endpoint: `${baseUrl}/api/auth/token`,
+    userinfo_endpoint: `${baseUrl}/api/auth/userinfo`,
+    jwks_uri: `${baseUrl}/.well-known/jwks.json`,
+    response_types_supported: ["code"],
+    grant_types_supported: ["authorization_code"],
+    subject_types_supported: ["public"],
+    id_token_signing_alg_values_supported: ["HS256"],
+    scopes_supported: ["openid", "email", "profile", "mcp:read", "mcp:write"],
+    claims_supported: ["iss", "sub", "aud", "exp", "iat", "email", "name"]
+  });
+});
   console.log('🔗 SSE connection requested from Claude web');
 
   try {
     const authContext = await authenticateRequest(req);
 
     if (!authContext) {
+
+// OAuth endpoints
+app.get("/api/auth/authorize", (req, res) => {
+  const { response_type, client_id, redirect_uri, scope, state } = req.query;
+  console.log("🔐 OAuth authorize request:", { response_type, client_id, redirect_uri, scope, state });
+
+  if (response_type !== "code") {
+    return res.status(400).json({ error: "unsupported_response_type" });
+  }
+
+  // Redirect to main BRAINLOOP app for authentication
+  const mainAppUrl = "https://brainloop.cc";
+  const authUrl = `${mainAppUrl}/api/auth/authorize?${new URLSearchParams(req.query).toString()}`;
+  console.log("🚀 Redirecting to main app for auth:", authUrl);
+  res.redirect(authUrl);
+});
+
+app.post("/api/auth/token", async (req, res) => {
+  const { grant_type, code, client_id, redirect_uri } = req.body;
+  console.log("🎫 OAuth token request:", { grant_type, code, client_id, redirect_uri });
+
+  if (grant_type !== "authorization_code") {
+    return res.status(400).json({ error: "unsupported_grant_type" });
+  }
+
+  if (!code) {
+    return res.status(400).json({ error: "invalid_request" });
+  }
+
+  try {
+    // Generate JWT token for MCP access
+    const token = jwt.sign(
+      {
+        sub: "user-authenticated",
+        aud: client_id,
+        scope: "mcp:read mcp:write",
+        iat: Math.floor(Date.now() / 1000),
+        exp: Math.floor(Date.now() / 1000) + 3600
+      },
+      JWT_SECRET
+    );
+
+    res.json({
+      access_token: token,
+      token_type: "Bearer",
+      expires_in: 3600,
+      scope: "mcp:read mcp:write"
+    });
+  } catch (error) {
+    console.error("🎫 Token generation error:", error);
+    res.status(500).json({ error: "server_error" });
+  }
+});
+
+app.get("/api/auth/userinfo", async (req, res) => {
+  console.log("👤 Userinfo request received");
+  try {
+    const authContext = await authenticateRequest(req);
+    if (!authContext) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: authContext.userId },
+      select: { id: true, name: true, email: true, image: true }
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    res.json({
+      sub: user.id,
+      name: user.name,
+      email: user.email,
+      picture: user.image,
+      email_verified: true
+    });
+  } catch (error) {
+    console.error("Userinfo error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+app.get("/.well-known/jwks.json", (req, res) => {
+  console.log("🔑 JWKS request received");
+  res.json({ keys: [] });
+});
       console.log('❌ No valid authentication for SSE connection');
       return res.status(401).send('Unauthorized');
     }
