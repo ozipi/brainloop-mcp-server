@@ -37,12 +37,13 @@ app.use((req, res, next) => {
 
 // Authentication helper
 async function authenticateRequest(req) {
+  const authHeader = req.headers.authorization;
+
   console.log("🔐 Authentication attempt:", {
     hasAuthHeader: !!authHeader,
     authHeaderPrefix: authHeader ? authHeader.substring(0, 20) + "..." : "none",
     userAgent: req.headers["user-agent"]?.substring(0, 50) || "unknown"
   });
-  const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
   console.log("🎫 Token received:", {
