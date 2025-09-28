@@ -12,8 +12,21 @@ const prisma = new PrismaClient();
 
 const JWT_SECRET = process.env.NEXTAUTH_SECRET || 'your-jwt-secret';
 
+// In-memory stores for OAuth flow (in production, use Redis or database)
+const authorizationCodes = new Map(); // code -> { clientId, userId, scopes, expiresAt }
+const refreshTokens = new Map(); // token -> { clientId, userId, scopes, expiresAt }
+
+// Default OAuth client for MCP
+const MCP_CLIENT = {
+  id: 'brainloop-mcp-client',
+  secret: 'mcp-client-secret', // In production, this should be properly secured
+  name: 'BRAINLOOP MCP Client',
+  redirectUris: ['https://claude.ai/api/mcp/auth_callback']
+};
+
 // Middleware
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(cors({
   origin: '*',
   credentials: true
@@ -141,114 +154,422 @@ app.get("/.well-known/mcp-client-config", (req, res) => {
   });
 });
 
-// SSE endpoint for Claude web
-app.get('/api/mcp/sse', async (req, res) => {
+// OAuth2 Protected Resource Discovery (RFC 8707)
+app.get("/.well-known/oauth-protected-resource", (req, res) => {
+  const baseUrl = "https://mcp.brainloop.cc";
+
+  console.log('🛡️ OAuth Protected Resource Discovery Request:', {
+    userAgent: req.headers['user-agent']?.substring(0, 80) || 'unknown',
+    referer: req.headers.referer || 'none',
+    timestamp: new Date().toISOString()
+  });
+
+  const config = {
+    // Standard OAuth2 Protected Resource metadata
+    resource_identifier: baseUrl,
+    authorization_servers: [baseUrl],
+    scopes_supported: [
+      'mcp:read',
+      'mcp:courses:read',
+      'mcp:courses:write'
+    ],
+    bearer_methods_supported: ['header'],
+    resource_documentation: `${baseUrl}/.well-known/mcp-client-config`,
+
+    // MCP-specific protected resource information
+    mcp_endpoints: {
+      server: `${baseUrl}/api/mcp/server`,
+      sse: `${baseUrl}/api/mcp/sse`
+    },
+    mcp_protocol_version: '2024-11-05',
+    mcp_capabilities: {
+      tools: { listChanged: true },
+      resources: { listChanged: true, subscribe: false },
+      logging: { level: 'info' }
+    },
+
+    // Claude-specific indicators
+    supports_claude_web: true,
+    mcp_ready: true
+  };
+
+  console.log('📤 OAuth Protected Resource Response:', {
+    resource_identifier: config.resource_identifier,
+    mcp_endpoints: config.mcp_endpoints,
+    supports_claude_web: config.supports_claude_web
+  });
+
+  res.set({
+    'Content-Type': 'application/json',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'X-MCP-Protocol-Version': '2024-11-05',
+    'X-MCP-Server-Name': 'BRAINLOOP',
+    'X-MCP-Capabilities': 'tools,resources',
+    'X-Supports-Claude-Web': 'true'
+  });
+
+  res.json(config);
+});
 
 // OAuth2 Authorization Server Discovery (RFC 8414)
 app.get("/.well-known/oauth-authorization-server", (req, res) => {
-  const baseUrl = process.env.NEXTAUTH_URL || "https://mcp.brainloop.cc";
+  const baseUrl = "https://mcp.brainloop.cc";
 
-  res.json({
-    issuer: baseUrl,
-    authorization_endpoint: `${baseUrl}/api/auth/authorize`,
-    token_endpoint: `${baseUrl}/api/auth/token`,
-    userinfo_endpoint: `${baseUrl}/api/auth/userinfo`,
-    jwks_uri: `${baseUrl}/.well-known/jwks.json`,
-    response_types_supported: ["code"],
-    grant_types_supported: ["authorization_code"],
-    subject_types_supported: ["public"],
-    id_token_signing_alg_values_supported: ["HS256"],
-    scopes_supported: ["openid", "email", "profile", "mcp:read", "mcp:write"],
-    claims_supported: ["iss", "sub", "aud", "exp", "iat", "email", "name"]
+  console.log('🔍 OAuth Discovery Request from:', {
+    userAgent: req.headers['user-agent']?.substring(0, 80) || 'unknown',
+    referer: req.headers.referer || 'none',
+    timestamp: new Date().toISOString()
   });
+
+  const config = {
+    issuer: baseUrl,
+    authorization_endpoint: `${baseUrl}/oauth/authorize`,
+    token_endpoint: `${baseUrl}/oauth/token`,
+    userinfo_endpoint: `${baseUrl}/oauth/userinfo`,
+    jwks_uri: `${baseUrl}/.well-known/jwks.json`,
+    scopes_supported: [
+      'mcp:read',
+      'mcp:courses:read',
+      'mcp:courses:write'
+    ],
+    response_types_supported: ["code"],
+    grant_types_supported: ["authorization_code", "refresh_token"],
+    token_endpoint_auth_methods_supported: ["client_secret_post", "none"],
+    code_challenge_methods_supported: ["S256"],
+    // MCP-specific extensions
+    mcp_endpoint: `${baseUrl}/api/mcp/server`,
+    mcp_sse_endpoint: `${baseUrl}/api/mcp/sse`,
+    transport_types: ['http', 'sse'],
+    mcp_protocol_version: '2024-11-05',
+    mcp_server_info: {
+      name: 'BRAINLOOP',
+      version: '3.0.0',
+      description: 'Self-contained MCP server for BRAINLOOP spaced repetition learning platform'
+    },
+    mcp_capabilities: {
+      tools: { listChanged: true },
+      resources: { listChanged: true, subscribe: false },
+      logging: { level: 'info' }
+    },
+    // Claude-specific hints
+    supports_claude_web: true,
+    mcp_ready: true
+  };
+
+  console.log('📤 Self-contained OAuth Discovery Response:', {
+    authorization_endpoint: config.authorization_endpoint,
+    token_endpoint: config.token_endpoint,
+    mcp_endpoint: config.mcp_endpoint,
+    issuer: config.issuer,
+    supports_claude_web: config.supports_claude_web
+  });
+
+  res.set({
+    'Content-Type': 'application/json',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'X-MCP-Protocol-Version': '2024-11-05',
+    'X-MCP-Server-Name': 'BRAINLOOP',
+    'X-MCP-Capabilities': 'tools,resources',
+    'X-Supports-Claude-Web': 'true'
+  });
+
+  res.json(config);
 });
+
+// SSE endpoint for Claude web
+app.get('/api/mcp/sse', async (req, res) => {
   console.log('🔗 SSE connection requested from Claude web');
 
   try {
     const authContext = await authenticateRequest(req);
 
     if (!authContext) {
+      console.log('❌ No valid authentication for SSE connection');
+      return res.status(401).send('Unauthorized');
+    }
 
-// OAuth endpoints
-app.get("/api/auth/authorize", (req, res) => {
-  const { response_type, client_id, redirect_uri, scope, state } = req.query;
-  console.log("🔐 OAuth authorize request:", { response_type, client_id, redirect_uri, scope, state });
+    console.log('✅ Authenticated SSE connection for user:', authContext.userId);
 
-  if (response_type !== "code") {
-    return res.status(400).json({ error: "unsupported_response_type" });
-  }
-
-  // Redirect to main BRAINLOOP app for authentication
-  const mainAppUrl = "https://brainloop.cc";
-  const authUrl = `${mainAppUrl}/api/auth/authorize?${new URLSearchParams(req.query).toString()}`;
-  console.log("🚀 Redirecting to main app for auth:", authUrl);
-  res.redirect(authUrl);
-});
-
-app.post("/api/auth/token", async (req, res) => {
-  const { grant_type, code, client_id, redirect_uri } = req.body;
-  console.log("🎫 OAuth token request:", { grant_type, code, client_id, redirect_uri });
-
-  if (grant_type !== "authorization_code") {
-    return res.status(400).json({ error: "unsupported_grant_type" });
-  }
-
-  if (!code) {
-    return res.status(400).json({ error: "invalid_request" });
-  }
-
-  try {
-    // Generate JWT token for MCP access
-    const token = jwt.sign(
-      {
-        sub: "user-authenticated",
-        aud: client_id,
-        scope: "mcp:read mcp:write",
-        iat: Math.floor(Date.now() / 1000),
-        exp: Math.floor(Date.now() / 1000) + 3600
-      },
-      JWT_SECRET
-    );
-
-    res.json({
-      access_token: token,
-      token_type: "Bearer",
-      expires_in: 3600,
-      scope: "mcp:read mcp:write"
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     });
+
+    // Send initial connection message
+    const initMessage = {
+      jsonrpc: '2.0',
+      method: 'notifications/initialized',
+      params: {
+        protocolVersion: '2024-11-05',
+        capabilities: {
+          tools: { listChanged: true },
+          actions: { listChanged: true },
+          resources: { listChanged: true, subscribe: false },
+          logging: { level: 'info' }
+        },
+        serverInfo: {
+          name: 'BRAINLOOP MCP Server',
+          version: '3.0.0',
+          description: 'Self-contained MCP server for BRAINLOOP spaced repetition learning platform'
+        }
+      }
+    };
+
+    res.write(`data: ${JSON.stringify(initMessage)}\n\n`);
+
+    // Keep connection alive with heartbeat
+    const heartbeat = setInterval(() => {
+      try {
+        res.write(`data: ${JSON.stringify({ type: 'heartbeat', timestamp: Date.now() })}\n\n`);
+      } catch (error) {
+        console.log('SSE connection closed, clearing heartbeat');
+        clearInterval(heartbeat);
+      }
+    }, 30000);
+
+    // Handle connection close
+    req.on('close', () => {
+      console.log('SSE connection closed by client');
+      clearInterval(heartbeat);
+    });
+
   } catch (error) {
-    console.error("🎫 Token generation error:", error);
-    res.status(500).json({ error: "server_error" });
+    console.error('SSE endpoint error:', error);
+    res.status(500).send('Internal Server Error');
   }
 });
 
-app.get("/api/auth/userinfo", async (req, res) => {
-  console.log("👤 Userinfo request received");
+// OAuth authorization endpoint - self-contained
+app.get("/oauth/authorize", (req, res) => {
+  const { response_type, client_id, redirect_uri, scope, state, code_challenge, code_challenge_method } = req.query;
+
+  console.log("🔐 Self-contained OAuth authorize request:", {
+    response_type, client_id, redirect_uri, scope, state,
+    hasCodeChallenge: !!code_challenge,
+    codeChallengeMethod: code_challenge_method
+  });
+
+  // Validate request parameters
+  if (response_type !== "code") {
+    const errorUrl = `${redirect_uri}?error=unsupported_response_type&state=${state}`;
+    return res.redirect(errorUrl);
+  }
+
+  if (client_id !== MCP_CLIENT.id) {
+    const errorUrl = `${redirect_uri}?error=invalid_client&state=${state}`;
+    return res.redirect(errorUrl);
+  }
+
+  if (!MCP_CLIENT.redirectUris.includes(redirect_uri)) {
+    return res.status(400).json({ error: "invalid_redirect_uri" });
+  }
+
+  // For MCP clients (like Claude), we'll do a simple auto-approval flow
+  // In a real implementation, you'd show a user consent screen here
+
+  // Generate authorization code
+  const authCode = crypto.randomBytes(32).toString('hex');
+  const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+
+  // Store authorization code
+  authorizationCodes.set(authCode, {
+    clientId: client_id,
+    userId: 'mcp-user', // For MCP, we'll use a default user
+    scopes: scope ? scope.split(' ') : ['mcp:read'],
+    redirectUri: redirect_uri,
+    codeChallenge: code_challenge,
+    codeChallengeMethod: code_challenge_method,
+    expiresAt
+  });
+
+  console.log("✅ Authorization code generated:", {
+    code: authCode.substring(0, 10) + '...',
+    clientId: client_id,
+    scopes: scope,
+    expiresAt: new Date(expiresAt).toISOString()
+  });
+
+  // Redirect back to Claude with authorization code
+  const redirectUrl = `${redirect_uri}?code=${authCode}&state=${state}`;
+  console.log("🚀 Redirecting to Claude with auth code:", {
+    redirectUri: redirect_uri,
+    codePreview: authCode.substring(0, 20) + '...',
+    state
+  });
+
+  res.redirect(redirectUrl);
+});
+
+// OAuth token endpoint - self-contained
+app.post("/oauth/token", async (req, res) => {
+  const { grant_type, code, client_id, redirect_uri, code_verifier } = req.body;
+
+  console.log("🎫 Self-contained OAuth token request:", {
+    grant_type, code: code?.substring(0, 10) + '...', client_id, redirect_uri,
+    hasCodeVerifier: !!code_verifier
+  });
+
+  // Validate grant type
+  if (grant_type !== "authorization_code") {
+    return res.status(400).json({
+      error: "unsupported_grant_type",
+      error_description: "Only authorization_code grant type is supported"
+    });
+  }
+
+  // Validate authorization code
+  if (!code || !authorizationCodes.has(code)) {
+    console.log("❌ Invalid or expired authorization code");
+    return res.status(400).json({
+      error: "invalid_grant",
+      error_description: "Authorization code is invalid or expired"
+    });
+  }
+
+  const authData = authorizationCodes.get(code);
+
+  // Check if code is expired
+  if (Date.now() > authData.expiresAt) {
+    authorizationCodes.delete(code);
+    console.log("❌ Authorization code expired");
+    return res.status(400).json({
+      error: "invalid_grant",
+      error_description: "Authorization code has expired"
+    });
+  }
+
+  // Validate client
+  if (client_id !== authData.clientId) {
+    console.log("❌ Client ID mismatch");
+    return res.status(400).json({
+      error: "invalid_client",
+      error_description: "Client ID does not match"
+    });
+  }
+
+  // Validate redirect URI
+  if (redirect_uri !== authData.redirectUri) {
+    console.log("❌ Redirect URI mismatch");
+    return res.status(400).json({
+      error: "invalid_grant",
+      error_description: "Redirect URI does not match"
+    });
+  }
+
+  // Validate PKCE if present
+  if (authData.codeChallenge) {
+    if (!code_verifier) {
+      return res.status(400).json({
+        error: "invalid_request",
+        error_description: "Code verifier is required"
+      });
+    }
+
+    const challengeMethod = authData.codeChallengeMethod || 'S256';
+    let computedChallenge;
+
+    if (challengeMethod === 'S256') {
+      computedChallenge = crypto.createHash('sha256')
+        .update(code_verifier)
+        .digest('base64url');
+    } else if (challengeMethod === 'plain') {
+      computedChallenge = code_verifier;
+    }
+
+    if (computedChallenge !== authData.codeChallenge) {
+      console.log("❌ PKCE validation failed");
+      return res.status(400).json({
+        error: "invalid_grant",
+        error_description: "Code verifier is invalid"
+      });
+    }
+  }
+
+  // Generate access token
+  const now = Math.floor(Date.now() / 1000);
+  const expiresIn = 3600; // 1 hour
+  const accessToken = jwt.sign(
+    {
+      iss: 'https://mcp.brainloop.cc',
+      sub: authData.userId,
+      aud: client_id,
+      scope: authData.scopes.join(' '),
+      iat: now,
+      exp: now + expiresIn
+    },
+    JWT_SECRET
+  );
+
+  // Generate refresh token
+  const refreshToken = crypto.randomBytes(32).toString('hex');
+  refreshTokens.set(refreshToken, {
+    clientId: client_id,
+    userId: authData.userId,
+    scopes: authData.scopes,
+    expiresAt: Date.now() + (30 * 24 * 60 * 60 * 1000) // 30 days
+  });
+
+  // Remove authorization code (one-time use)
+  authorizationCodes.delete(code);
+
+  console.log("✅ Access token generated successfully:", {
+    sub: authData.userId,
+    clientId: client_id,
+    scopes: authData.scopes,
+    expiresIn,
+    tokenPreview: accessToken.substring(0, 20) + '...'
+  });
+
+  res.json({
+    access_token: accessToken,
+    token_type: "Bearer",
+    expires_in: expiresIn,
+    refresh_token: refreshToken,
+    scope: authData.scopes.join(' ')
+  });
+});
+
+// OAuth userinfo endpoint - self-contained
+app.get("/oauth/userinfo", async (req, res) => {
+  console.log("👤 Self-contained userinfo request received");
+
   try {
     const authContext = await authenticateRequest(req);
     if (!authContext) {
-      return res.status(401).json({ error: "Unauthorized" });
+      return res.status(401).json({
+        error: "invalid_token",
+        error_description: "Access token is invalid or expired"
+      });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: authContext.userId },
-      select: { id: true, name: true, email: true, image: true }
-    });
+    console.log("✅ Userinfo for authenticated user:", authContext.userId);
 
-    if (!user) {
-      return res.status(404).json({ error: "User not found" });
-    }
-
+    // For MCP clients, return a generic user profile
+    // In a real implementation, you'd fetch from database
     res.json({
-      sub: user.id,
-      name: user.name,
-      email: user.email,
-      picture: user.image,
-      email_verified: true
+      sub: authContext.userId,
+      name: "MCP User",
+      email: "mcp@brainloop.cc",
+      picture: null,
+      email_verified: true,
+      scope: authContext.scopes.join(' ')
     });
   } catch (error) {
-    console.error("Userinfo error:", error);
-    res.status(500).json({ error: "Internal server error" });
+    console.error("❌ Userinfo error:", error);
+    res.status(500).json({
+      error: "server_error",
+      error_description: "Internal server error"
+    });
   }
 });
 
@@ -362,8 +683,8 @@ app.all('/api/mcp/server', async (req, res) => {
             },
             serverInfo: {
               name: 'BRAINLOOP MCP Server',
-              version: '2.0.3',
-              description: 'MCP server for BRAINLOOP spaced repetition learning platform'
+              version: '3.0.0',
+              description: 'Self-contained MCP server for BRAINLOOP spaced repetition learning platform'
             }
           }
         });
@@ -496,7 +817,7 @@ app.all('/', async (req, res) => {
               },
               serverInfo: {
                 name: 'BRAINLOOP MCP Server',
-                version: '2.0.3',
+                version: '3.0.0',
                 description: 'MCP server for BRAINLOOP spaced repetition learning platform'
               }
             }
@@ -743,14 +1064,16 @@ app.all('/', async (req, res) => {
   // For other requests, return MCP server info
   res.json({
     name: 'BRAINLOOP MCP Server',
-    version: '2.0.3',
-    description: 'Dedicated MCP protocol server for BRAINLOOP (OAuth handled by main app)',
+    version: '3.0.0',
+    description: 'Self-contained MCP server with OAuth 2.1 for BRAINLOOP',
     endpoints: {
       mcp: '/api/mcp/server',
       sse: '/api/mcp/sse',
+      oauth: '/oauth/authorize',
+      token: '/oauth/token',
       health: '/health'
     },
-    auth_note: 'Authentication handled by https://brainloop.cc'
+    auth_note: 'Self-contained OAuth 2.1 authorization server'
   });
 });
 
@@ -761,11 +1084,14 @@ app.get('/health', (req, res) => {
 
 // Start server
 app.listen(port, () => {
-  console.log(`🚀 BRAINLOOP MCP Server running on port ${port}`);
+  console.log(`🚀 BRAINLOOP MCP Server v3.0.0 running on port ${port}`);
   console.log(`📡 SSE endpoint: /api/mcp/sse`);
   console.log(`🤖 MCP endpoint: /api/mcp/server`);
-  console.log(`🔑 Authentication: Handled by https://brainloop.cc`);
-  console.log(`✅ Dedicated MCP protocol server v2.0.1 deployed successfully`);
+  console.log(`🔐 OAuth authorize: /oauth/authorize`);
+  console.log(`🎫 OAuth token: /oauth/token`);
+  console.log(`👤 OAuth userinfo: /oauth/userinfo`);
+  console.log(`🔑 Self-contained OAuth 2.1 authorization server`);
+  console.log(`✅ Self-contained MCP server v3.0.0 deployed successfully`);
 });
 
 // Graceful shutdown
