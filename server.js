@@ -46,48 +46,43 @@ async function authenticateRequest(req) {
   });
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    console.log("❌ No valid Bearer token found");
+    return null;
+  }
+
+  const token = authHeader.substring(7);
+
   console.log("🎫 Token received:", {
     tokenLength: token.length,
     tokenStart: token.substring(0, 20) + "..."
   });
-    return null;
-  console.log("✅ Token decoded successfully:", {
-    sub: decoded.sub,
-    aud: decoded.aud,
-    scope: decoded.scope,
-    exp: decoded.exp,
-    iat: decoded.iat
-  });
-  }
-  console.log("🔍 Scope validation:", {
-    scopes,
-    hasValidScope,
-    requiredScopes: ["mcp:read", "mcp:write"]
-  });
-
-  const token = authHeader.substring(7);
 
   try {
     // Verify JWT token issued by main BRAINLOOP app
     const decoded = jwt.verify(token, JWT_SECRET);
 
+    console.log("✅ Token decoded successfully:", {
+      sub: decoded.sub,
+      aud: decoded.aud,
+      scope: decoded.scope,
+      exp: decoded.exp,
+      iat: decoded.iat
+    });
+
     // Validate that the token has proper MCP scopes
     const scopes = decoded.scope ? decoded.scope.split(' ') : [];
     const hasValidScope = scopes.some(scope => scope.startsWith('mcp:'));
-  console.log("✅ User authenticated successfully:", {
-    userId: user.id,
-    email: user.email,
-    name: user.name
-  });
+
+    console.log("🔍 Scope validation:", {
+      scopes,
+      hasValidScope,
+      requiredScopes: ["mcp:read", "mcp:write"]
+    });
 
     if (!hasValidScope) {
       console.log('❌ Token missing required MCP scopes');
       return null;
     }
-  console.log("❌ Token verification failed:", {
-    error: error.message,
-    tokenStart: token.substring(0, 20) + "..."
-  });
 
     const user = await prisma.user.findUnique({
       where: { id: decoded.sub }
@@ -98,6 +93,12 @@ async function authenticateRequest(req) {
       return null;
     }
 
+    console.log("✅ User authenticated successfully:", {
+      userId: user.id,
+      email: user.email,
+      name: user.name
+    });
+
     return {
       isAuthenticated: true,
       userId: decoded.sub,
@@ -107,7 +108,10 @@ async function authenticateRequest(req) {
       audience: ['mcp-server'],
     };
   } catch (error) {
-    console.error('JWT verification failed:', error);
+    console.log("❌ Token verification failed:", {
+      error: error.message,
+      tokenStart: token.substring(0, 20) + "..."
+    });
     return null;
   }
 }
