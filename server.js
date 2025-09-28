@@ -577,64 +577,6 @@ app.get("/.well-known/jwks.json", (req, res) => {
   console.log("🔑 JWKS request received");
   res.json({ keys: [] });
 });
-      console.log('❌ No valid authentication for SSE connection');
-      return res.status(401).send('Unauthorized');
-    }
-
-    console.log('✅ Authenticated SSE connection for user:', authContext.userId);
-
-    res.writeHead(200, {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    });
-
-    // Send initial connection message
-    const initMessage = {
-      jsonrpc: '2.0',
-      method: 'notifications/initialized',
-      params: {
-        protocolVersion: '2024-11-05',
-        capabilities: {
-          tools: { listChanged: true },
-          actions: { listChanged: true },
-          resources: { listChanged: true, subscribe: false },
-          logging: { level: 'info' }
-        },
-        serverInfo: {
-          name: 'BRAINLOOP MCP Server',
-          version: '1.0.0',
-          description: 'MCP server for BRAINLOOP spaced repetition learning platform'
-        }
-      }
-    };
-
-    res.write(`data: ${JSON.stringify(initMessage)}\n\n`);
-
-    // Keep connection alive with heartbeat
-    const heartbeat = setInterval(() => {
-      try {
-        res.write(`data: ${JSON.stringify({ type: 'heartbeat', timestamp: Date.now() })}\n\n`);
-      } catch (error) {
-        console.log('SSE connection closed, clearing heartbeat');
-        clearInterval(heartbeat);
-      }
-    }, 30000);
-
-    // Handle connection close
-    req.on('close', () => {
-      console.log('SSE connection closed by client');
-      clearInterval(heartbeat);
-    });
-
-  } catch (error) {
-    console.error('SSE endpoint error:', error);
-    res.status(500).send('Internal Server Error');
-  }
-});
 
 // MCP Server main endpoint
 app.all('/api/mcp/server', async (req, res) => {
