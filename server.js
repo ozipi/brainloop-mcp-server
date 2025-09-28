@@ -135,23 +135,39 @@ async function authenticateRequest(req) {
 
 // MCP Client Configuration Discovery
 app.get("/.well-known/mcp-client-config", (req, res) => {
-  const baseUrl = process.env.NEXTAUTH_URL || "https://mcp.brainloop.cc";
+  const baseUrl = "https://mcp.brainloop.cc";
 
-  res.json({
+  console.log('🔧 MCP Client Config Request:', {
+    userAgent: req.headers['user-agent']?.substring(0, 80) || 'unknown',
+    referer: req.headers.referer || 'none',
+    timestamp: new Date().toISOString()
+  });
+
+  const config = {
     client_name: "BRAINLOOP MCP Client",
     client_id: "brainloop-mcp-client",
-    redirect_uris: [`${baseUrl}/api/auth/callback`],
-    scopes: ["mcp:read", "mcp:write"],
+    redirect_uris: ["https://claude.ai/api/mcp/auth_callback"],
+    scopes: ["mcp:read", "mcp:courses:read", "mcp:courses:write"],
     mcp_transport: {
       type: "http",
       endpoint: `${baseUrl}/api/mcp/server`
     },
     auth: {
       type: "oauth2",
-      authorization_endpoint: `${baseUrl}/api/auth/authorize`,
-      token_endpoint: `${baseUrl}/api/auth/token`
+      authorization_endpoint: `${baseUrl}/oauth/authorize`,
+      token_endpoint: `${baseUrl}/oauth/token`,
+      userinfo_endpoint: `${baseUrl}/oauth/userinfo`
     }
+  };
+
+  console.log('📤 MCP Client Config Response:', {
+    client_id: config.client_id,
+    authorization_endpoint: config.auth.authorization_endpoint,
+    token_endpoint: config.auth.token_endpoint,
+    mcp_endpoint: config.mcp_transport.endpoint
   });
+
+  res.json(config);
 });
 
 // OAuth2 Protected Resource Discovery (RFC 8707)
