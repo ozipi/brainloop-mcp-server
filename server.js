@@ -8,7 +8,7 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 // Version info
-const SERVER_VERSION = '3.0.6';
+const SERVER_VERSION = '3.0.7';
 console.log(`🚀 BRAINLOOP MCP Server v${SERVER_VERSION} starting...`);
 
 // Global Prisma instance
@@ -152,27 +152,20 @@ app.get("/.well-known/mcp-client-config", (req, res) => {
 
   const config = {
     client_name: "BRAINLOOP MCP Client",
-    client_id: "brainloop-mcp-client",
-    redirect_uris: ["https://claude.ai/api/mcp/auth_callback"],
     scopes: ["mcp:read", "mcp:courses:read", "mcp:courses:write"],
     mcp_transport: {
       type: "http",
       endpoint: `${baseUrl}/api/mcp/server`
     },
-    oauth: {
-      type: "authorization_code",
-      authorization_url: `${baseUrl}/oauth/authorize`,
-      token_url: `${baseUrl}/oauth/token`,
-      client_id: "brainloop-mcp-client",
-      client_secret: "mcp-client-secret",
-      scope: "mcp:read mcp:courses:read mcp:courses:write"
-    }
+    // Point to OAuth authorization server for dynamic client registration
+    oauth_authorization_server: `${baseUrl}/.well-known/oauth-authorization-server`,
+    // Indicate that dynamic client registration is required
+    requires_dynamic_registration: true
   };
 
   console.log('📤 MCP Client Config Response:', {
-    client_id: config.client_id,
-    authorization_url: config.oauth.authorization_url,
-    token_url: config.oauth.token_url,
+    oauth_authorization_server: config.oauth_authorization_server,
+    requires_dynamic_registration: config.requires_dynamic_registration,
     mcp_endpoint: config.mcp_transport.endpoint
   });
 
