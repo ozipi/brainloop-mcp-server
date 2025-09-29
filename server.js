@@ -8,7 +8,7 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 // Version info
-const SERVER_VERSION = '3.0.7';
+const SERVER_VERSION = '3.0.8';
 console.log(`🚀 BRAINLOOP MCP Server v${SERVER_VERSION} starting...`);
 
 // Global Prisma instance
@@ -774,28 +774,9 @@ app.all('/api/mcp/server', async (req, res) => {
     const body = req.body || {};
     const method = body.method || 'unknown';
 
-    // Allow Claude web to perform initialize and discovery calls without authentication
-    if (isClaudeWeb && (method === 'initialize' || method === 'notifications/initialized')) {
+    // Allow Claude web to perform notifications/initialized without authentication, but NOT initialize
+    if (isClaudeWeb && method === 'notifications/initialized') {
       console.log('🔓 Allowing Claude web discovery call without auth:', method);
-
-      if (method === 'initialize') {
-        return res.json({
-          jsonrpc: '2.0',
-          id: body.id,
-          result: {
-            protocolVersion: '2024-11-05',
-            capabilities: {
-              tools: { listChanged: true },
-              logging: { level: 'info' }
-            },
-            serverInfo: {
-              name: 'BRAINLOOP MCP Server (OAuth Required)',
-              version: SERVER_VERSION,
-              description: 'Self-contained MCP server for BRAINLOOP - OAuth 2.1 authentication required for tools/resources'
-            }
-          }
-        });
-      }
 
       if (method === 'tools/list') {
         return res.json({
@@ -909,28 +890,9 @@ app.all('/', async (req, res) => {
         hasAuth: !!req.headers.authorization
       });
 
-      // Allow Claude web to perform initialize and discovery calls without authentication
-      if (isClaudeWeb && (method === 'initialize' || method === 'notifications/initialized')) {
+      // Allow Claude web to perform notifications/initialized without authentication, but NOT initialize
+      if (isClaudeWeb && method === 'notifications/initialized') {
         console.log('🔓 Allowing Claude web discovery call without auth:', method);
-
-        if (method === 'initialize') {
-          return res.json({
-            jsonrpc: '2.0',
-            id: body.id,
-            result: {
-              protocolVersion: '2024-11-05',
-              capabilities: {
-                tools: { listChanged: true },
-                logging: { level: 'info' }
-              },
-              serverInfo: {
-                name: 'BRAINLOOP MCP Server (OAuth Required)',
-                version: SERVER_VERSION,
-                description: 'Self-contained MCP server for BRAINLOOP - OAuth 2.1 authentication required for tools/resources'
-              }
-            }
-          });
-        }
 
         if (method === 'tools/list') {
           return res.json({
