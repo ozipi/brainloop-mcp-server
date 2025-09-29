@@ -155,18 +155,20 @@ app.get("/.well-known/mcp-client-config", (req, res) => {
       type: "http",
       endpoint: `${baseUrl}/api/mcp/server`
     },
-    auth: {
-      type: "oauth2",
-      authorization_endpoint: `${baseUrl}/oauth/authorize`,
-      token_endpoint: `${baseUrl}/oauth/token`,
-      userinfo_endpoint: `${baseUrl}/oauth/userinfo`
+    oauth: {
+      type: "authorization_code",
+      authorization_url: `${baseUrl}/oauth/authorize`,
+      token_url: `${baseUrl}/oauth/token`,
+      client_id: "brainloop-mcp-client",
+      client_secret: "mcp-client-secret",
+      scope: "mcp:read mcp:courses:read mcp:courses:write"
     }
   };
 
   console.log('📤 MCP Client Config Response:', {
     client_id: config.client_id,
-    authorization_endpoint: config.auth.authorization_endpoint,
-    token_endpoint: config.auth.token_endpoint,
+    authorization_url: config.oauth.authorization_url,
+    token_url: config.oauth.token_url,
     mcp_endpoint: config.mcp_transport.endpoint
   });
 
@@ -375,21 +377,50 @@ app.get("/oauth/authorize", (req, res) => {
   console.log("🔐 Self-contained OAuth authorize request:", {
     response_type, client_id, redirect_uri, scope, state,
     hasCodeChallenge: !!code_challenge,
-    codeChallengeMethod: code_challenge_method
+    codeChallengeMethod: code_challenge_method,
+    allParams: req.query
   });
+
+  // Check for missing parameters and provide helpful errors
+  if (!response_type) {
+    console.log("❌ Missing response_type parameter");
+    return res.status(400).json({
+      error: "invalid_request",
+      error_description: "Missing response_type parameter"
+    });
+  }
+
+  if (!client_id) {
+    console.log("❌ Missing client_id parameter");
+    return res.status(400).json({
+      error: "invalid_request",
+      error_description: "Missing client_id parameter"
+    });
+  }
+
+  if (!redirect_uri) {
+    console.log("❌ Missing redirect_uri parameter");
+    return res.status(400).json({
+      error: "invalid_request",
+      error_description: "Missing redirect_uri parameter"
+    });
+  }
 
   // Validate request parameters
   if (response_type !== "code") {
+    console.log("❌ Unsupported response_type:", response_type);
     const errorUrl = `${redirect_uri}?error=unsupported_response_type&state=${state}`;
     return res.redirect(errorUrl);
   }
 
   if (client_id !== MCP_CLIENT.id) {
+    console.log("❌ Invalid client_id:", client_id, "expected:", MCP_CLIENT.id);
     const errorUrl = `${redirect_uri}?error=invalid_client&state=${state}`;
     return res.redirect(errorUrl);
   }
 
   if (!MCP_CLIENT.redirectUris.includes(redirect_uri)) {
+    console.log("❌ Invalid redirect_uri:", redirect_uri, "allowed:", MCP_CLIENT.redirectUris);
     return res.status(400).json({ error: "invalid_redirect_uri" });
   }
 
