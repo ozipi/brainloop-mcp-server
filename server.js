@@ -7,6 +7,10 @@ const crypto = require('crypto');
 const app = express();
 const port = process.env.PORT || 3000;
 
+// Version info
+const SERVER_VERSION = '3.0.1';
+console.log(`🚀 BRAINLOOP MCP Server v${SERVER_VERSION} starting...`);
+
 // Global Prisma instance
 const prisma = new PrismaClient();
 
@@ -1138,7 +1142,7 @@ app.get('/health', (req, res) => {
 
 // Start server
 app.listen(port, () => {
-  console.log(`🚀 BRAINLOOP MCP Server v3.0.0 running on port ${port}`);
+  console.log(`🚀 BRAINLOOP MCP Server v${SERVER_VERSION} running on port ${port}`);
   console.log(`📡 SSE endpoint: /api/mcp/sse`);
   console.log(`🤖 MCP endpoint: /api/mcp/server`);
   console.log(`🔐 OAuth authorize: /oauth/authorize`);
