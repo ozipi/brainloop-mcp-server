@@ -643,6 +643,14 @@ app.all('/api/mcp/server', async (req, res) => {
               name: 'BRAINLOOP MCP Server',
               version: '3.0.0',
               description: 'Self-contained MCP server for BRAINLOOP spaced repetition learning platform'
+            },
+            // Add OAuth configuration for Claude discovery
+            authentication: {
+              type: 'oauth2',
+              authorizationUrl: 'https://mcp.brainloop.cc/oauth/authorize',
+              tokenUrl: 'https://mcp.brainloop.cc/oauth/token',
+              clientId: 'brainloop-mcp-client',
+              scopes: ['mcp:read', 'mcp:courses:read', 'mcp:courses:write']
             }
           }
         });
@@ -776,7 +784,15 @@ app.all('/', async (req, res) => {
               serverInfo: {
                 name: 'BRAINLOOP MCP Server',
                 version: '3.0.0',
-                description: 'MCP server for BRAINLOOP spaced repetition learning platform'
+                description: 'Self-contained MCP server for BRAINLOOP spaced repetition learning platform'
+              },
+              // Add OAuth configuration for Claude discovery
+              authentication: {
+                type: 'oauth2',
+                authorizationUrl: 'https://mcp.brainloop.cc/oauth/authorize',
+                tokenUrl: 'https://mcp.brainloop.cc/oauth/token',
+                clientId: 'brainloop-mcp-client',
+                scopes: ['mcp:read', 'mcp:courses:read', 'mcp:courses:write']
               }
             }
           });
