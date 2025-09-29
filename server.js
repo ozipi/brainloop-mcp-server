@@ -8,7 +8,7 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 // Version info
-const SERVER_VERSION = '3.0.4';
+const SERVER_VERSION = '3.0.5';
 console.log(`🚀 BRAINLOOP MCP Server v${SERVER_VERSION} starting...`);
 
 // Global Prisma instance
@@ -735,6 +735,7 @@ app.all('/api/mcp/server', async (req, res) => {
           result: {
             protocolVersion: '2024-11-05',
             capabilities: {
+              tools: { listChanged: true },
               logging: { level: 'info' }
             },
             serverInfo: {
@@ -787,7 +788,9 @@ app.all('/api/mcp/server', async (req, res) => {
     const authContext = await authenticateRequest(req);
 
     if (!authContext) {
-      console.log('❌ MCP Server: Authentication required');
+      console.log('❌ MCP Server: Authentication required - sending WWW-Authenticate header');
+      const baseUrl = getBaseUrl(req);
+      res.set('WWW-Authenticate', `Bearer realm="MCP", resource_metadata="${baseUrl}/.well-known/oauth-protected-resource"`);
       return res.status(401).json({
         jsonrpc: '2.0',
         id: body.id,
@@ -867,6 +870,7 @@ app.all('/', async (req, res) => {
             result: {
               protocolVersion: '2024-11-05',
               capabilities: {
+                tools: { listChanged: true },
                 logging: { level: 'info' }
               },
               serverInfo: {
@@ -1088,7 +1092,9 @@ app.all('/', async (req, res) => {
       const authContext = await authenticateRequest(req);
 
       if (!authContext) {
-        console.log('❌ MCP Server: Authentication required');
+        console.log('❌ MCP Server: Authentication required - sending WWW-Authenticate header');
+        const baseUrl = getBaseUrl(req);
+        res.set('WWW-Authenticate', `Bearer realm="MCP", resource_metadata="${baseUrl}/.well-known/oauth-protected-resource"`);
         return res.status(401).json({
           jsonrpc: '2.0',
           id: body.id,
