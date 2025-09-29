@@ -38,10 +38,13 @@ app.use((req, res, next) => {
   const origin = req.headers.origin || 'no-origin';
   const authHeader = req.headers.authorization || 'no-auth';
 
+  // Log ALL requests to see what Claude is trying to access
   console.log(`🔍 [${req.method}] ${req.path}`, {
     userAgent: userAgent.substring(0, 100),
     origin,
     hasAuth: authHeader !== 'no-auth',
+    referer: req.headers.referer || 'none',
+    query: Object.keys(req.query).length ? req.query : 'none',
     timestamp: new Date().toISOString()
   });
 
@@ -705,14 +708,6 @@ app.all('/api/mcp/server', async (req, res) => {
               name: 'BRAINLOOP MCP Server',
               version: '3.0.0',
               description: 'Self-contained MCP server for BRAINLOOP spaced repetition learning platform'
-            },
-            // Add OAuth configuration for Claude discovery
-            auth: {
-              type: 'oauth2',
-              authorization_endpoint: 'https://mcp.brainloop.cc/oauth/authorize',
-              token_endpoint: 'https://mcp.brainloop.cc/oauth/token',
-              client_id: 'brainloop-mcp-client',
-              scopes: ['mcp:read', 'mcp:courses:read', 'mcp:courses:write']
             }
           }
         });
@@ -847,14 +842,6 @@ app.all('/', async (req, res) => {
                 name: 'BRAINLOOP MCP Server',
                 version: '3.0.0',
                 description: 'Self-contained MCP server for BRAINLOOP spaced repetition learning platform'
-              },
-              // Add OAuth configuration for Claude discovery
-              auth: {
-                type: 'oauth2',
-                authorization_endpoint: 'https://mcp.brainloop.cc/oauth/authorize',
-                token_endpoint: 'https://mcp.brainloop.cc/oauth/token',
-                client_id: 'brainloop-mcp-client',
-                scopes: ['mcp:read', 'mcp:courses:read', 'mcp:courses:write']
               }
             }
           });
