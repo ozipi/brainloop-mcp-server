@@ -8,7 +8,7 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 // Version info
-const SERVER_VERSION = '3.0.1';
+const SERVER_VERSION = '3.0.2';
 console.log(`🚀 BRAINLOOP MCP Server v${SERVER_VERSION} starting...`);
 
 // Global Prisma instance
@@ -725,7 +725,7 @@ app.all('/api/mcp/server', async (req, res) => {
     const method = body.method || 'unknown';
 
     // Allow Claude web to perform initialize and discovery calls without authentication
-    if (isClaudeWeb && (method === 'initialize' || method === 'notifications/initialized' || method === 'tools/list' || method === 'resources/list')) {
+    if (isClaudeWeb && (method === 'initialize' || method === 'notifications/initialized')) {
       console.log('🔓 Allowing Claude web discovery call without auth:', method);
 
       if (method === 'initialize') {
@@ -859,7 +859,7 @@ app.all('/', async (req, res) => {
       });
 
       // Allow Claude web to perform initialize and discovery calls without authentication
-      if (isClaudeWeb && (method === 'initialize' || method === 'notifications/initialized' || method === 'tools/list' || method === 'resources/list')) {
+      if (isClaudeWeb && (method === 'initialize' || method === 'notifications/initialized')) {
         console.log('🔓 Allowing Claude web discovery call without auth:', method);
 
         if (method === 'initialize') {
