@@ -8,7 +8,7 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 // Version info
-const SERVER_VERSION = '3.0.3';
+const SERVER_VERSION = '3.0.4';
 console.log(`🚀 BRAINLOOP MCP Server v${SERVER_VERSION} starting...`);
 
 // Global Prisma instance
@@ -735,14 +735,12 @@ app.all('/api/mcp/server', async (req, res) => {
           result: {
             protocolVersion: '2024-11-05',
             capabilities: {
-              tools: { listChanged: true },
-              resources: { listChanged: true, subscribe: false },
               logging: { level: 'info' }
             },
             serverInfo: {
-              name: 'BRAINLOOP MCP Server',
-              version: '3.0.0',
-              description: 'Self-contained MCP server for BRAINLOOP spaced repetition learning platform'
+              name: 'BRAINLOOP MCP Server (OAuth Required)',
+              version: SERVER_VERSION,
+              description: 'Self-contained MCP server for BRAINLOOP - OAuth 2.1 authentication required for tools/resources'
             }
           }
         });
@@ -869,14 +867,12 @@ app.all('/', async (req, res) => {
             result: {
               protocolVersion: '2024-11-05',
               capabilities: {
-                tools: { listChanged: true },
-                resources: { listChanged: true, subscribe: false },
                 logging: { level: 'info' }
               },
               serverInfo: {
-                name: 'BRAINLOOP MCP Server',
-                version: '3.0.0',
-                description: 'Self-contained MCP server for BRAINLOOP spaced repetition learning platform'
+                name: 'BRAINLOOP MCP Server (OAuth Required)',
+                version: SERVER_VERSION,
+                description: 'Self-contained MCP server for BRAINLOOP - OAuth 2.1 authentication required for tools/resources'
               }
             }
           });
