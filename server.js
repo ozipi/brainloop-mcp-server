@@ -8,7 +8,7 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 // Version info
-const SERVER_VERSION = '3.0.2';
+const SERVER_VERSION = '3.0.3';
 console.log(`🚀 BRAINLOOP MCP Server v${SERVER_VERSION} starting...`);
 
 // Global Prisma instance
@@ -1149,7 +1149,7 @@ app.listen(port, () => {
   console.log(`🎫 OAuth token: /oauth/token`);
   console.log(`👤 OAuth userinfo: /oauth/userinfo`);
   console.log(`🔑 Self-contained OAuth 2.1 authorization server`);
-  console.log(`✅ Self-contained MCP server v3.0.0 deployed successfully`);
+  console.log(`✅ Self-contained MCP server v${SERVER_VERSION} deployed successfully`);
 });
 
 // Graceful shutdown
