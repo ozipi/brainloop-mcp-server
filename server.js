@@ -390,10 +390,72 @@ app.get("/oauth/authorize", (req, res) => {
     return res.status(400).json({ error: "invalid_redirect_uri" });
   }
 
-  // For MCP clients (like Claude), we'll do a simple auto-approval flow
-  // In a real implementation, you'd show a user consent screen here
+  // Show a proper consent page for better UX
+  if (!req.query.approve) {
+    // Show consent page
+    const consentPage = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>BRAINLOOP MCP Authorization</title>
+      <style>
+        body { font-family: Arial, sans-serif; max-width: 500px; margin: 50px auto; padding: 20px; background: #f5f5f5; }
+        .card { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { color: #333; margin-bottom: 20px; }
+        .app-info { background: #f8f9fa; padding: 15px; border-radius: 4px; margin: 20px 0; }
+        .permissions { margin: 20px 0; }
+        .permission { padding: 8px 0; border-bottom: 1px solid #eee; }
+        .buttons { margin-top: 30px; text-align: center; }
+        button { padding: 12px 30px; margin: 0 10px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        .approve { background: #007bff; color: white; }
+        .deny { background: #6c757d; color: white; }
+        button:hover { opacity: 0.9; }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <h1>🔐 Authorization Request</h1>
 
-  // Generate authorization code
+        <div class="app-info">
+          <strong>Claude AI</strong> wants to connect to your BRAINLOOP MCP server.
+        </div>
+
+        <div class="permissions">
+          <h3>Requested Permissions:</h3>
+          <div class="permission">📖 Read access to MCP resources</div>
+          <div class="permission">📚 Read course information</div>
+          <div class="permission">✏️ Write course information</div>
+        </div>
+
+        <p><strong>Client ID:</strong> ${client_id}</p>
+        <p><strong>Redirect URI:</strong> ${redirect_uri}</p>
+
+        <div class="buttons">
+          <button class="approve" onclick="approve()">✅ Authorize</button>
+          <button class="deny" onclick="deny()">❌ Deny</button>
+        </div>
+      </div>
+
+      <script>
+        function approve() {
+          const url = new URL(window.location);
+          url.searchParams.set('approve', 'true');
+          window.location.href = url.toString();
+        }
+
+        function deny() {
+          const url = '${redirect_uri}?error=access_denied&state=${state}';
+          window.location.href = url;
+        }
+      </script>
+    </body>
+    </html>
+    `;
+
+    return res.send(consentPage);
+  }
+
+  // User approved - generate authorization code
   const authCode = crypto.randomBytes(32).toString('hex');
   const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
 
