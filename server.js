@@ -8,7 +8,7 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 // Version info
-const SERVER_VERSION = '3.0.5';
+const SERVER_VERSION = '3.0.6';
 console.log(`🚀 BRAINLOOP MCP Server v${SERVER_VERSION} starting...`);
 
 // Global Prisma instance
@@ -254,6 +254,7 @@ app.get("/.well-known/oauth-authorization-server", (req, res) => {
     authorization_endpoint: `${baseUrl}/oauth/authorize`,
     token_endpoint: `${baseUrl}/oauth/token`,
     userinfo_endpoint: `${baseUrl}/oauth/userinfo`,
+    registration_endpoint: `${baseUrl}/oauth/register`,
     jwks_uri: `${baseUrl}/.well-known/jwks.json`,
     scopes_supported: [
       'mcp:read',
@@ -524,6 +525,62 @@ app.get("/oauth/authorize", (req, res) => {
   });
 
   res.redirect(redirectUrl);
+});
+
+// OAuth Dynamic Client Registration (RFC 7591) - Required by Claude
+app.post("/oauth/register", (req, res) => {
+  const { redirect_uris, client_name, token_endpoint_auth_method, grant_types, response_types, scope } = req.body;
+
+  console.log("📋 Dynamic Client Registration request:", {
+    client_name,
+    redirect_uris,
+    token_endpoint_auth_method,
+    grant_types,
+    response_types,
+    scope,
+    userAgent: req.headers['user-agent']?.substring(0, 80) || 'unknown',
+    timestamp: new Date().toISOString()
+  });
+
+  // Validate required fields
+  if (!redirect_uris || !Array.isArray(redirect_uris) || redirect_uris.length === 0) {
+    return res.status(400).json({
+      error: "invalid_redirect_uri",
+      error_description: "redirect_uris is required and must be an array"
+    });
+  }
+
+  // Validate Claude's expected redirect URI
+  const validRedirectUris = redirect_uris.filter(uri =>
+    uri === 'https://claude.ai/api/mcp/auth_callback' ||
+    uri.startsWith('https://claude.ai/api/mcp/auth_callback')
+  );
+
+  if (validRedirectUris.length === 0) {
+    return res.status(400).json({
+      error: "invalid_redirect_uri",
+      error_description: "redirect_uri must be https://claude.ai/api/mcp/auth_callback"
+    });
+  }
+
+  // Generate client credentials
+  const clientId = `brainloop-mcp-${crypto.randomBytes(8).toString('hex')}`;
+  const clientSecret = crypto.randomBytes(32).toString('hex');
+
+  console.log("✅ Dynamic client registered:", { clientId, validRedirectUris });
+
+  // Return client registration response per RFC 7591
+  res.json({
+    client_id: clientId,
+    client_secret: clientSecret,
+    client_secret_expires_at: 0, // Never expires
+    redirect_uris: validRedirectUris,
+    client_name: client_name || 'Claude MCP Client',
+    token_endpoint_auth_method: token_endpoint_auth_method || 'client_secret_post',
+    grant_types: grant_types || ['authorization_code'],
+    response_types: response_types || ['code'],
+    scope: scope || 'mcp:read mcp:courses:read mcp:courses:write'
+  });
 });
 
 // OAuth token endpoint - self-contained
