@@ -8,7 +8,7 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 // Version info
-const SERVER_VERSION = '3.0.10';
+const SERVER_VERSION = '3.0.11';
 console.log(`🚀 BRAINLOOP MCP Server v${SERVER_VERSION} starting...`);
 
 // Global Prisma instance
@@ -208,37 +208,7 @@ async function authenticateRequest(req) {
 
 // MCP Client Configuration Discovery removed - handled by main BRAINLOOP app
 
-// MCP Client Configuration Discovery
-app.get("/.well-known/mcp-client-config", (req, res) => {
-  const baseUrl = "https://mcp.brainloop.cc";
-
-  console.log('🔧 MCP Client Config Request:', {
-    userAgent: req.headers['user-agent']?.substring(0, 80) || 'unknown',
-    referer: req.headers.referer || 'none',
-    timestamp: new Date().toISOString()
-  });
-
-  const config = {
-    client_name: "BRAINLOOP MCP Client",
-    scopes: ["mcp:read", "mcp:courses:read", "mcp:courses:write"],
-    mcp_transport: {
-      type: "http",
-      endpoint: `${baseUrl}/api/mcp/server`
-    },
-    // Point to OAuth authorization server for dynamic client registration
-    oauth_authorization_server: `${baseUrl}/.well-known/oauth-authorization-server`,
-    // Indicate that dynamic client registration is required
-    requires_dynamic_registration: true
-  };
-
-  console.log('📤 MCP Client Config Response:', {
-    oauth_authorization_server: config.oauth_authorization_server,
-    requires_dynamic_registration: config.requires_dynamic_registration,
-    mcp_endpoint: config.mcp_transport.endpoint
-  });
-
-  res.json(config);
-});
+// Removed MCP client config - let Claude discover OAuth naturally through standard OAuth discovery
 
 // OAuth2 Protected Resource Discovery (RFC 8707)
 app.get("/.well-known/oauth-protected-resource", (req, res) => {
@@ -260,7 +230,7 @@ app.get("/.well-known/oauth-protected-resource", (req, res) => {
       'mcp:courses:write'
     ],
     bearer_methods_supported: ['header'],
-    resource_documentation: `${baseUrl}/.well-known/mcp-client-config`,
+    resource_documentation: `${baseUrl}/.well-known/oauth-authorization-server`,
 
     // MCP-specific protected resource information
     mcp_endpoints: {
@@ -314,44 +284,18 @@ app.get("/.well-known/oauth-authorization-server", (req, res) => {
     issuer: baseUrl,
     authorization_endpoint: `${baseUrl}/oauth/authorize`,
     token_endpoint: `${baseUrl}/oauth/token`,
-    userinfo_endpoint: `${baseUrl}/oauth/userinfo`,
     registration_endpoint: `${baseUrl}/oauth/register`,
-    jwks_uri: `${baseUrl}/.well-known/jwks.json`,
-    scopes_supported: [
-      'mcp:read',
-      'mcp:courses:read',
-      'mcp:courses:write'
+    grant_types_supported: [
+      'authorization_code',
+      'client_credentials'
     ],
-    response_types_supported: ["code"],
-    grant_types_supported: ["authorization_code", "refresh_token"],
-    token_endpoint_auth_methods_supported: ["client_secret_post", "none"],
-    code_challenge_methods_supported: ["S256"],
-    // MCP-specific extensions
-    mcp_endpoint: `${baseUrl}/api/mcp/server`,
-    mcp_sse_endpoint: `${baseUrl}/api/mcp/sse`,
-    transport_types: ['http', 'sse'],
-    mcp_protocol_version: '2024-11-05',
-    mcp_server_info: {
-      name: 'BRAINLOOP',
-      version: '3.0.0',
-      description: 'Self-contained MCP server for BRAINLOOP spaced repetition learning platform'
-    },
-    mcp_capabilities: {
-      tools: { listChanged: true },
-      resources: { listChanged: true, subscribe: false },
-      logging: { level: 'info' }
-    },
-    // Claude-specific hints
-    supports_claude_web: true,
-    mcp_ready: true
+    code_challenge_methods_supported: ['S256']
   };
 
-  console.log('📤 Self-contained OAuth Discovery Response:', {
+  console.log('📤 Simplified OAuth Discovery Response:', {
     authorization_endpoint: config.authorization_endpoint,
     token_endpoint: config.token_endpoint,
-    mcp_endpoint: config.mcp_endpoint,
-    issuer: config.issuer,
-    supports_claude_web: config.supports_claude_web
+    issuer: config.issuer
   });
 
   res.set({
