@@ -8,7 +8,7 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 // Version info
-const SERVER_VERSION = '3.0.8';
+const SERVER_VERSION = '3.0.9';
 console.log(`🚀 BRAINLOOP MCP Server v${SERVER_VERSION} starting...`);
 
 // Global Prisma instance
@@ -53,6 +53,74 @@ app.use((req, res, next) => {
   });
 
   next();
+});
+
+// GET root endpoint with SSE support for authenticated MCP connection
+// This is what Claude calls AFTER OAuth: GET / with Accept: text/event-stream and Authorization: Bearer
+app.get('/', async (req, res) => {
+  const acceptHeader = req.headers.accept || '';
+  const authHeader = req.headers.authorization || '';
+
+  console.log('🔍 [GET] Root request:', {
+    accept: acceptHeader,
+    hasAuth: !!authHeader,
+    userAgent: req.headers['user-agent']?.substring(0, 50) || 'unknown',
+    isSSERequest: acceptHeader.includes('text/event-stream'),
+    timestamp: new Date().toISOString()
+  });
+
+  // Check if Claude is requesting SSE connection
+  if (acceptHeader.includes('text/event-stream')) {
+    // This is the SSE connection Claude makes AFTER OAuth
+    const authContext = await authenticateRequest(req);
+
+    if (!authContext) {
+      console.log('❌ SSE connection failed: No valid authentication');
+      const baseUrl = "https://mcp.brainloop.cc";
+      res.set('WWW-Authenticate', `Bearer realm="MCP", resource_metadata="${baseUrl}/.well-known/oauth-protected-resource"`);
+      return res.status(401).json({
+        error: "unauthorized",
+        error_description: "Authentication required for MCP connection"
+      });
+    }
+
+    console.log('✅ Authenticated SSE connection established for user:', authContext.userId);
+
+    // Set up Server-Sent Events
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Headers': 'Authorization, Content-Type'
+    });
+
+    // Send initial connection success
+    res.write('event: connected\n');
+    res.write(`data: {"status": "connected", "userId": "${authContext.userId}", "timestamp": "${new Date().toISOString()}"}\n\n`);
+
+    // Keep connection alive
+    const keepAlive = setInterval(() => {
+      res.write('event: ping\n');
+      res.write(`data: {"type": "ping", "timestamp": "${new Date().toISOString()}"}\n\n`);
+    }, 30000);
+
+    // Handle client disconnect
+    req.on('close', () => {
+      console.log('📡 SSE connection closed for user:', authContext.userId);
+      clearInterval(keepAlive);
+    });
+
+    return;
+  }
+
+  // Regular GET request (not SSE)
+  res.json({
+    status: 'BRAINLOOP MCP Server Ready',
+    version: SERVER_VERSION,
+    timestamp: new Date().toISOString(),
+    message: 'Use Accept: text/event-stream with Bearer token for MCP connection'
+  });
 });
 
 // Authentication helper
@@ -820,7 +888,7 @@ app.all('/api/mcp/server', async (req, res) => {
 
     if (!authContext) {
       console.log('❌ MCP Server: Authentication required - sending WWW-Authenticate header');
-      const baseUrl = getBaseUrl(req);
+      const baseUrl = "https://mcp.brainloop.cc";
       res.set('WWW-Authenticate', `Bearer realm="MCP", resource_metadata="${baseUrl}/.well-known/oauth-protected-resource"`);
       return res.status(401).json({
         jsonrpc: '2.0',
@@ -1105,7 +1173,7 @@ app.all('/', async (req, res) => {
 
       if (!authContext) {
         console.log('❌ MCP Server: Authentication required - sending WWW-Authenticate header');
-        const baseUrl = getBaseUrl(req);
+        const baseUrl = "https://mcp.brainloop.cc";
         res.set('WWW-Authenticate', `Bearer realm="MCP", resource_metadata="${baseUrl}/.well-known/oauth-protected-resource"`);
         return res.status(401).json({
           jsonrpc: '2.0',
