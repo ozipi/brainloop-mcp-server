@@ -1221,6 +1221,73 @@ app.all('/', async (req, res) => {
         });
       }
 
+      // Handle tools/list method with authentication
+      if (method === 'tools/list') {
+        const authContext = await authenticateRequest(req);
+
+        if (!authContext) {
+          console.log('❌ MCP Server: Authentication required for tools/list - sending WWW-Authenticate header');
+          const baseUrl = "https://mcp.brainloop.cc";
+          res.set('WWW-Authenticate', `Bearer realm="MCP", resource_metadata="${baseUrl}/.well-known/oauth-protected-resource"`);
+          return res.status(401).json({
+            jsonrpc: '2.0',
+            id: body.id,
+            error: { code: -32001, message: 'Authentication required' }
+          });
+        }
+
+        console.log('🔧 Authenticated tools/list request for user:', authContext.userId);
+        return res.json({
+          jsonrpc: '2.0',
+          id: body.id,
+          result: {
+            tools: [
+              {
+                name: 'create_course',
+                description: 'Create a new course in the BRAINLOOP system',
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    title: { type: 'string', description: 'Course title' },
+                    description: { type: 'string', description: 'Course description' },
+                    author: { type: 'string', description: 'Course author' },
+                    tags: { type: 'array', items: { type: 'string' }, description: 'Course tags' },
+                    hero: { type: 'string', description: 'Hero image URL' },
+                    icon: { type: 'string', description: 'Course icon URL' },
+                    isPrivate: { type: 'boolean', description: 'Whether the course is private' },
+                    userId: { type: 'string', description: 'User ID of the course creator' },
+                  },
+                  required: ['title', 'description', 'userId'],
+                },
+              },
+              {
+                name: 'get_user_progress',
+                description: 'Get learning progress for a specific user',
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    userId: { type: 'string', description: 'User ID' },
+                    courseId: { type: 'string', description: 'Optional course ID to filter by' },
+                  },
+                  required: ['userId'],
+                },
+              },
+              {
+                name: 'get_user_enrollments',
+                description: 'Get all courses a user is enrolled in',
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    userId: { type: 'string', description: 'User ID' },
+                  },
+                  required: ['userId'],
+                },
+              }
+            ]
+          }
+        });
+      }
+
       // Allow Claude web to perform notifications/initialized without authentication, but NOT initialize
       if (isClaudeWeb && method === 'notifications/initialized') {
         console.log('🔓 Allowing Claude web discovery call without auth:', method);
