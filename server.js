@@ -8,7 +8,7 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 // Version info
-const SERVER_VERSION = '3.0.15';
+const SERVER_VERSION = '3.0.16';
 console.log(`🚀 BRAINLOOP MCP Server v${SERVER_VERSION} starting...`);
 
 // Global Prisma instance
@@ -967,10 +967,150 @@ app.all('/api/mcp/server', async (req, res) => {
     console.log('✅ Authenticated MCP request for user:', authContext.userId);
 
     // Handle authenticated MCP methods here
+    if (method === 'tools/list') {
+      console.log('🔧 Authenticated tools/list request');
+      return res.json({
+        jsonrpc: '2.0',
+        id: body.id,
+        result: {
+          tools: [
+            {
+              name: 'get_courses',
+              description: 'Get list of available courses for the authenticated user',
+              inputSchema: {
+                type: 'object',
+                properties: {}
+              }
+            },
+            {
+              name: 'get_user_progress',
+              description: 'Get learning progress for the authenticated user',
+              inputSchema: {
+                type: 'object',
+                properties: {
+                  courseId: { type: 'string', description: 'Optional course ID to filter by' }
+                }
+              }
+            },
+            {
+              name: 'get_user_enrollments',
+              description: 'Get all courses the authenticated user is enrolled in',
+              inputSchema: {
+                type: 'object',
+                properties: {}
+              }
+            }
+          ]
+        }
+      });
+    }
+
+    if (method === 'resources/list') {
+      console.log('📚 Authenticated resources/list request');
+      return res.json({
+        jsonrpc: '2.0',
+        id: body.id,
+        result: {
+          resources: [
+            {
+              uri: `brainloop://user/${authContext.userId}/courses`,
+              name: 'My Courses',
+              description: 'Your enrolled courses and progress',
+              mimeType: 'application/json'
+            },
+            {
+              uri: `brainloop://user/${authContext.userId}/progress`,
+              name: 'Learning Progress',
+              description: 'Your learning progress across all courses',
+              mimeType: 'application/json'
+            }
+          ]
+        }
+      });
+    }
+
+    if (method === 'tools/call') {
+      const toolName = body.params?.name;
+      console.log('🛠️ Authenticated tool call:', toolName);
+
+      if (toolName === 'get_courses') {
+        // Get courses for the authenticated user
+        const userCourses = await prisma.enrollment.findMany({
+          where: { userId: authContext.userId },
+          include: {
+            course: true,
+            progress: true
+          }
+        });
+
+        return res.json({
+          jsonrpc: '2.0',
+          id: body.id,
+          result: {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  courses: userCourses.map(enrollment => ({
+                    id: enrollment.course.id,
+                    title: enrollment.course.title,
+                    description: enrollment.course.description,
+                    progress: enrollment.progress.length,
+                    enrolledAt: enrollment.createdAt
+                  }))
+                }, null, 2)
+              }
+            ]
+          }
+        });
+      }
+
+      if (toolName === 'get_user_progress') {
+        // Get progress for the authenticated user
+        const userProgress = await prisma.progress.findMany({
+          where: { userId: authContext.userId },
+          include: {
+            unit: {
+              include: { course: true }
+            }
+          }
+        });
+
+        return res.json({
+          jsonrpc: '2.0',
+          id: body.id,
+          result: {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  progress: userProgress.map(p => ({
+                    courseTitle: p.unit.course.title,
+                    unitTitle: p.unit.title,
+                    stage: p.stage,
+                    nextReview: p.nextReview,
+                    lastReviewed: p.lastReviewed,
+                    interval: p.interval
+                  }))
+                }, null, 2)
+              }
+            ]
+          }
+        });
+      }
+
+      return res.json({
+        jsonrpc: '2.0',
+        id: body.id,
+        error: { code: -32601, message: `Unknown tool: ${toolName}` }
+      });
+    }
+
+    // Default response for other methods
     return res.json({
       jsonrpc: '2.0',
       id: body.id,
-      result: { status: 'authenticated', method }
+      result: { status: 'authenticated', method, userId: authContext.userId }
     });
 
   } catch (error) {
