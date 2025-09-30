@@ -1,6 +1,6 @@
 {
   "name": "brainloop-mcp-server",
-  "version": "3.0.13",
+  "version": "3.0.14",
   "description": "Self-contained MCP server with OAuth 2.1 for BRAINLOOP - Railway deployment",
   "main": "server.js",
   "scripts": {
