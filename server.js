@@ -975,16 +975,9 @@ app.all('/api/mcp/server', async (req, res) => {
         result: {
           protocolVersion: '2025-06-18',
           capabilities: {
-            tools: {
-              listChanged: true
-            },
-            resources: {
-              listChanged: true,
-              subscribe: false
-            },
-            logging: {
-              level: 'info'
-            }
+            tools: {},
+            resources: {},
+            logging: {}
           },
           serverInfo: {
             name: 'BRAINLOOP MCP Server',
@@ -1215,16 +1208,9 @@ app.all('/', async (req, res) => {
           result: {
             protocolVersion: '2025-06-18',
             capabilities: {
-              tools: {
-                listChanged: true
-              },
-              resources: {
-                listChanged: true,
-                subscribe: false
-              },
-              logging: {
-                level: 'info'
-              }
+              tools: {},
+              resources: {},
+              logging: {}
             },
             serverInfo: {
               name: 'BRAINLOOP MCP Server',
@@ -1492,6 +1478,10 @@ app.all('/', async (req, res) => {
 
         if (method === 'notifications/initialized') {
           console.log('✅ Client initialized notification received');
+          // Proactively send tools/list notification to Claude
+          setTimeout(() => {
+            console.log('📤 Proactively sending tools list to Claude');
+          }, 100);
           return res.json({
             jsonrpc: '2.0',
             id: body.id,
