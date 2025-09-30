@@ -8,7 +8,7 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 // Version info
-const SERVER_VERSION = '3.0.17';
+const SERVER_VERSION = '3.0.18';
 console.log(`🚀 BRAINLOOP MCP Server v${SERVER_VERSION} starting...`);
 
 // Global Prisma instance
@@ -1410,14 +1410,8 @@ app.all('/', async (req, res) => {
         });
       }
 
-      console.log('✅ Authenticated MCP request for user:', authContext.userId);
-
-      // Handle authenticated MCP methods here
-      return res.json({
-        jsonrpc: '2.0',
-        id: body.id,
-        result: { status: 'authenticated', method }
-      });
+      console.log('✅ Authenticated MCP request for user (duplicate section - should not reach here):', authContext.userId);
+      // This section should be removed - it's a duplicate that interferes with proper MCP handling
 
     } catch (error) {
       console.error('MCP Server error:', error);
