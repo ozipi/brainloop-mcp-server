@@ -1186,6 +1186,41 @@ app.all('/', async (req, res) => {
         hasAuth: !!req.headers.authorization
       });
 
+      // Handle initialize method with authentication
+      if (method === 'initialize') {
+        const authContext = await authenticateRequest(req);
+
+        if (!authContext) {
+          console.log('❌ MCP Server: Authentication required for initialize - sending WWW-Authenticate header');
+          const baseUrl = "https://mcp.brainloop.cc";
+          res.set('WWW-Authenticate', `Bearer realm="MCP", resource_metadata="${baseUrl}/.well-known/oauth-protected-resource"`);
+          return res.status(401).json({
+            jsonrpc: '2.0',
+            id: body.id,
+            error: { code: -32001, message: 'Authentication required' }
+          });
+        }
+
+        console.log('🔄 Authenticated MCP initialize request for user:', authContext.userId);
+        return res.json({
+          jsonrpc: '2.0',
+          id: body.id,
+          result: {
+            protocolVersion: '2024-11-05',
+            capabilities: {
+              tools: { listChanged: true },
+              resources: { listChanged: true, subscribe: false },
+              logging: { level: 'info' }
+            },
+            serverInfo: {
+              name: 'BRAINLOOP MCP Server',
+              version: '3.0.19',
+              description: 'Personalized learning data access for BRAINLOOP users'
+            }
+          }
+        });
+      }
+
       // Allow Claude web to perform notifications/initialized without authentication, but NOT initialize
       if (isClaudeWeb && method === 'notifications/initialized') {
         console.log('🔓 Allowing Claude web discovery call without auth:', method);
