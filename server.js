@@ -975,48 +975,22 @@ app.all('/api/mcp/server', async (req, res) => {
         result: {
           protocolVersion: '2025-06-18',
           capabilities: {
-            tools: {},
-            resources: {},
-            logging: { level: 'info' }
+            tools: {
+              listChanged: true
+            },
+            resources: {
+              listChanged: true,
+              subscribe: false
+            },
+            logging: {
+              level: 'info'
+            }
           },
           serverInfo: {
             name: 'BRAINLOOP MCP Server',
-            version: '3.0.23',
+            version: '3.0.24',
             description: 'Personalized learning data access for BRAINLOOP users'
-          },
-          tools: [
-            {
-              name: 'create_course',
-              description: 'Create a new course in the BRAINLOOP system',
-              inputSchema: {
-                type: 'object',
-                properties: {
-                  title: { type: 'string', description: 'Course title' },
-                  description: { type: 'string', description: 'Course description' },
-                  author: { type: 'string', description: 'Course author' }
-                },
-                required: ['title', 'description']
-              }
-            },
-            {
-              name: 'get_user_progress',
-              description: 'Get learning progress for the authenticated user',
-              inputSchema: {
-                type: 'object',
-                properties: {
-                  courseId: { type: 'string', description: 'Optional course ID to filter by' }
-                }
-              }
-            },
-            {
-              name: 'get_user_enrollments',
-              description: 'Get all courses the user is enrolled in',
-              inputSchema: {
-                type: 'object',
-                properties: {}
-              }
-            }
-          ]
+          }
         }
       });
     }
@@ -1241,48 +1215,22 @@ app.all('/', async (req, res) => {
           result: {
             protocolVersion: '2025-06-18',
             capabilities: {
-              tools: {},
-              resources: {},
-              logging: { level: 'info' }
+              tools: {
+                listChanged: true
+              },
+              resources: {
+                listChanged: true,
+                subscribe: false
+              },
+              logging: {
+                level: 'info'
+              }
             },
             serverInfo: {
               name: 'BRAINLOOP MCP Server',
-              version: '3.0.23',
+              version: '3.0.24',
               description: 'Personalized learning data access for BRAINLOOP users'
-            },
-            tools: [
-              {
-                name: 'create_course',
-                description: 'Create a new course in the BRAINLOOP system',
-                inputSchema: {
-                  type: 'object',
-                  properties: {
-                    title: { type: 'string', description: 'Course title' },
-                    description: { type: 'string', description: 'Course description' },
-                    author: { type: 'string', description: 'Course author' }
-                  },
-                  required: ['title', 'description']
-                }
-              },
-              {
-                name: 'get_user_progress',
-                description: 'Get learning progress for the authenticated user',
-                inputSchema: {
-                  type: 'object',
-                  properties: {
-                    courseId: { type: 'string', description: 'Optional course ID to filter by' }
-                  }
-                }
-              },
-              {
-                name: 'get_user_enrollments',
-                description: 'Get all courses the user is enrolled in',
-                inputSchema: {
-                  type: 'object',
-                  properties: {}
-                }
-              }
-            ]
+            }
           }
         });
       }
