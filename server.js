@@ -8,7 +8,7 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 // Version info
-const SERVER_VERSION = '3.0.16';
+const SERVER_VERSION = '3.0.17';
 console.log(`🚀 BRAINLOOP MCP Server v${SERVER_VERSION} starting...`);
 
 // Global Prisma instance
@@ -967,6 +967,27 @@ app.all('/api/mcp/server', async (req, res) => {
     console.log('✅ Authenticated MCP request for user:', authContext.userId);
 
     // Handle authenticated MCP methods here
+    if (method === 'initialize') {
+      console.log('🔄 Authenticated MCP initialize request');
+      return res.json({
+        jsonrpc: '2.0',
+        id: body.id,
+        result: {
+          protocolVersion: '2024-11-05',
+          capabilities: {
+            tools: { listChanged: true },
+            resources: { listChanged: true, subscribe: false },
+            logging: { level: 'info' }
+          },
+          serverInfo: {
+            name: 'BRAINLOOP MCP Server',
+            version: '3.0.16',
+            description: 'Personalized learning data access for BRAINLOOP users'
+          }
+        }
+      });
+    }
+
     if (method === 'tools/list') {
       console.log('🔧 Authenticated tools/list request');
       return res.json({
