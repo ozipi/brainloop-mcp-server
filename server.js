@@ -8,7 +8,7 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 // Version info
-const SERVER_VERSION = '3.0.11';
+const SERVER_VERSION = '3.0.12';
 console.log(`🚀 BRAINLOOP MCP Server v${SERVER_VERSION} starting...`);
 
 // Global Prisma instance
@@ -423,14 +423,12 @@ app.get("/oauth/authorize", (req, res) => {
     return res.redirect(errorUrl);
   }
 
-  if (client_id !== MCP_CLIENT.id) {
-    console.log("❌ Invalid client_id:", client_id, "expected:", MCP_CLIENT.id);
-    const errorUrl = `${redirect_uri}?error=invalid_client&state=${state}`;
-    return res.redirect(errorUrl);
-  }
+  // Accept any client_id (following working repo pattern)
+  console.log("✅ Accepting client_id:", client_id);
 
-  if (!MCP_CLIENT.redirectUris.includes(redirect_uri)) {
-    console.log("❌ Invalid redirect_uri:", redirect_uri, "allowed:", MCP_CLIENT.redirectUris);
+  // Accept Claude's redirect_uri (following working repo pattern)
+  if (!redirect_uri.includes('claude.ai')) {
+    console.log("❌ Invalid redirect_uri - must be claude.ai:", redirect_uri);
     return res.status(400).json({ error: "invalid_redirect_uri" });
   }
 
