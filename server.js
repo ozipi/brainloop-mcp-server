@@ -973,7 +973,7 @@ app.all('/api/mcp/server', async (req, res) => {
         jsonrpc: '2.0',
         id: body.id,
         result: {
-          protocolVersion: '2024-11-05',
+          protocolVersion: '2025-06-18',
           capabilities: {
             tools: { listChanged: true },
             resources: { listChanged: true, subscribe: false },
@@ -981,7 +981,7 @@ app.all('/api/mcp/server', async (req, res) => {
           },
           serverInfo: {
             name: 'BRAINLOOP MCP Server',
-            version: '3.0.16',
+            version: '3.0.21',
             description: 'Personalized learning data access for BRAINLOOP users'
           }
         }
@@ -1206,7 +1206,7 @@ app.all('/', async (req, res) => {
           jsonrpc: '2.0',
           id: body.id,
           result: {
-            protocolVersion: '2024-11-05',
+            protocolVersion: '2025-06-18',
             capabilities: {
               tools: { listChanged: true },
               resources: { listChanged: true, subscribe: false },
