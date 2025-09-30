@@ -1396,22 +1396,6 @@ app.all('/', async (req, res) => {
         });
       }
 
-      // For other requests, require authentication
-      const authContext = await authenticateRequest(req);
-
-      if (!authContext) {
-        console.log('❌ MCP Server: Authentication required - sending WWW-Authenticate header');
-        const baseUrl = "https://mcp.brainloop.cc";
-        res.set('WWW-Authenticate', `Bearer realm="MCP", resource_metadata="${baseUrl}/.well-known/oauth-protected-resource"`);
-        return res.status(401).json({
-          jsonrpc: '2.0',
-          id: body.id,
-          error: { code: -32001, message: 'Authentication required' }
-        });
-      }
-
-      console.log('✅ Authenticated MCP request for user (duplicate section - should not reach here):', authContext.userId);
-      // This section should be removed - it's a duplicate that interferes with proper MCP handling
 
     } catch (error) {
       console.error('MCP Server error:', error);
