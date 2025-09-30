@@ -1509,19 +1509,22 @@ app.all('/', async (req, res) => {
     }
   }
   
-  // For other requests, return MCP server info
+  // For other requests, return MCP server info indicating this IS the MCP server
   res.json({
     name: 'BRAINLOOP MCP Server',
-    version: '3.0.0',
-    description: 'Self-contained MCP server with OAuth 2.1 for BRAINLOOP',
+    version: '3.0.22',
+    description: 'MCP server with OAuth 2.1 authentication for BRAINLOOP learning platform',
+    mcp: {
+      protocol: 'json-rpc-2.0',
+      version: '2025-06-18',
+      capabilities: ['tools', 'resources'],
+      authentication: 'oauth2'
+    },
     endpoints: {
-      mcp: '/api/mcp/server',
-      sse: '/api/mcp/sse',
       oauth: '/oauth/authorize',
       token: '/oauth/token',
-      health: '/health'
-    },
-    auth_note: 'Self-contained OAuth 2.1 authorization server'
+      discovery: '/.well-known/oauth-authorization-server'
+    }
   });
 });
 
