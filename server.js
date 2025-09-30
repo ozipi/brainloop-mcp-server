@@ -8,7 +8,7 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 // Version info
-const SERVER_VERSION = '3.0.12';
+const SERVER_VERSION = '3.0.13';
 console.log(`🚀 BRAINLOOP MCP Server v${SERVER_VERSION} starting...`);
 
 // Global Prisma instance
@@ -159,12 +159,14 @@ async function authenticateRequest(req) {
 
     // Validate that the token has proper MCP scopes
     const scopes = decoded.scope ? decoded.scope.split(' ') : [];
-    const hasValidScope = scopes.some(scope => scope.startsWith('mcp:'));
+    const hasValidScope = scopes.some(scope =>
+      scope.startsWith('mcp:') || scope === 'claudeai'
+    );
 
     console.log("🔍 Scope validation:", {
       scopes,
       hasValidScope,
-      requiredScopes: ["mcp:read", "mcp:write"]
+      acceptedScopes: ["mcp:read", "mcp:write", "claudeai"]
     });
 
     if (!hasValidScope) {
